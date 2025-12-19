@@ -149,35 +149,35 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T066 [P] [US3] Create test file test/Lisp/EvalSpec.hs with hspec structure
-- [ ] T067 [P] [US3] Add test for lambda expression "((lambda (x) (+ x 1)) 5)" in test/Lisp/EvalSpec.hs
-- [ ] T068 [P] [US3] Add test for if expression "(if (> x 0) 'positive 'negative)" with x=5 in test/Lisp/EvalSpec.hs
-- [ ] T069 [P] [US3] Add test for let expression "(let ((x 10) (y 20)) (+ x y))" in test/Lisp/EvalSpec.hs
-- [ ] T070 [P] [US3] Add test for quote expression "(quote (a b c))" in test/Lisp/EvalSpec.hs
-- [ ] T071 [P] [US3] Add test for single quote syntax "'(a b c)" in test/Lisp/EvalSpec.hs
-- [ ] T072 [P] [US3] Add test for begin expression "(begin (define x 5) (+ x 1))" in test/Lisp/EvalSpec.hs
-- [ ] T073 [P] [US3] Add test for define expression "(define square (lambda (x) (* x x)))" and call "(square 4)" in test/Lisp/EvalSpec.hs
-- [ ] T074 [P] [US3] Add test for nested let bindings with shadowing in test/Lisp/EvalSpec.hs
-- [ ] T075 [P] [US3] Add test for closure capturing lexical environment in test/Lisp/EvalSpec.hs
-- [ ] T076 [P] [US3] Add test for lambda with multiple parameters in test/Lisp/EvalSpec.hs
-- [ ] T077 [P] [US3] Add test for if with false condition in test/Lisp/EvalSpec.hs
-- [ ] T078 [P] [US3] Add test for begin with multiple expressions in test/Lisp/EvalSpec.hs
-- [ ] T079 [US3] Update test/Spec.hs to include EvalSpec tests
+- [x] T066 [P] [US3] Create test file test/Lisp/EvalSpec.hs with hspec structure
+- [x] T067 [P] [US3] Add test for lambda expression "((lambda (x) (+ x 1)) 5)" in test/Lisp/EvalSpec.hs
+- [x] T068 [P] [US3] Add test for if expression "(if (> x 0) 'positive 'negative)" with x=5 in test/Lisp/EvalSpec.hs
+- [x] T069 [P] [US3] Add test for let expression "(let ((x 10) (y 20)) (+ x y))" in test/Lisp/EvalSpec.hs
+- [x] T070 [P] [US3] Add test for quote expression "(quote (a b c))" in test/Lisp/EvalSpec.hs
+- [x] T071 [P] [US3] Add test for single quote syntax "'(a b c)" in test/Lisp/EvalSpec.hs
+- [x] T072 [P] [US3] Add test for begin expression "(begin (define x 5) (+ x 1))" in test/Lisp/EvalSpec.hs
+- [x] T073 [P] [US3] Add test for define expression "(define square (lambda (x) (* x x)))" and call "(square 4)" in test/Lisp/EvalSpec.hs
+- [x] T074 [P] [US3] Add test for nested let bindings with shadowing in test/Lisp/EvalSpec.hs
+- [x] T075 [P] [US3] Add test for closure capturing lexical environment in test/Lisp/EvalSpec.hs
+- [x] T076 [P] [US3] Add test for lambda with multiple parameters in test/Lisp/EvalSpec.hs
+- [x] T077 [P] [US3] Add test for if with false condition in test/Lisp/EvalSpec.hs
+- [x] T078 [P] [US3] Add test for begin with multiple expressions in test/Lisp/EvalSpec.hs
+- [x] T079 [US3] Update test/Spec.hs to include EvalSpec tests
 
 ### Implementation for User Story 3
 
-- [ ] T080 [US3] Implement lambda form evaluation (create closure) in src/Lisp/Eval.hs
-- [ ] T081 [US3] Implement closure application (extend captured environment) in src/Lisp/Eval.hs
-- [ ] T082 [US3] Implement if form evaluation (condition, then, else) in src/Lisp/Eval.hs
-- [ ] T083 [US3] Implement let form evaluation (extend environment, evaluate body) in src/Lisp/Eval.hs
-- [ ] T084 [US3] Implement quote form evaluation (return quoted expression) in src/Lisp/Eval.hs
-- [ ] T085 [US3] Implement begin form evaluation (sequential evaluation, return last) in src/Lisp/Eval.hs
-- [ ] T086 [US3] Implement define form evaluation (add to environment, return name) in src/Lisp/Eval.hs
-- [ ] T087 [US3] Update evalExprWithEnv to handle define (return updated environment) in src/Lisp/Eval.hs
-- [ ] T088 [US3] Add error handling for undefined variables in src/Lisp/Eval.hs
-- [ ] T089 [US3] Add error handling for lambda arity mismatches in src/Lisp/Eval.hs
-- [ ] T090 [US3] Add error handling for invalid special form structure in src/Lisp/Eval.hs
-- [ ] T091 [US3] Run tests and verify all EvalSpec tests pass
+- [x] T080 [US3] Implement lambda form evaluation (create closure) in src/Lisp/Eval.hs
+- [x] T081 [US3] Implement closure application (extend captured environment) in src/Lisp/Eval.hs
+- [x] T082 [US3] Implement if form evaluation (condition, then, else) in src/Lisp/Eval.hs
+- [x] T083 [US3] Implement let form evaluation (extend environment, evaluate body) in src/Lisp/Eval.hs
+- [x] T084 [US3] Implement quote form evaluation (return quoted expression) in src/Lisp/Eval.hs
+- [x] T085 [US3] Implement begin form evaluation (sequential evaluation, return last) in src/Lisp/Eval.hs
+- [x] T086 [US3] Implement define form evaluation (add to environment, return name) in src/Lisp/Eval.hs
+- [x] T087 [US3] Update evalExprWithEnv to handle define (return updated environment) in src/Lisp/Eval.hs
+- [x] T088 [US3] Add error handling for undefined variables in src/Lisp/Eval.hs
+- [x] T089 [US3] Add error handling for lambda arity mismatches in src/Lisp/Eval.hs
+- [x] T090 [US3] Add error handling for invalid special form structure in src/Lisp/Eval.hs
+- [x] T091 [US3] Run tests and verify all EvalSpec tests pass
 
 **Checkpoint**: At this point, User Story 3 should be fully functional. All core language forms work correctly.
 
