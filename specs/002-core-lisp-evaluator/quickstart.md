@@ -199,7 +199,7 @@ Properties
 
 ### Factorial
 
-Create `examples/factorial.lisp`:
+Create `examples/factorial.plisp`:
 ```lisp
 (define factorial
   (lambda (n)
@@ -212,7 +212,7 @@ Create `examples/factorial.lisp`:
 
 Load and evaluate:
 ```bash
-cat examples/factorial.lisp | cabal run pattern-lisp
+cat examples/factorial.plisp | cabal run pattern-lisp
 ```
 
 Expected output:
@@ -222,7 +222,7 @@ Expected output:
 
 ### List Operations
 
-Create `examples/lists.lisp`:
+Create `examples/lists.plisp`:
 ```lisp
 (define list1 '(1 2 3))
 (define list2 '(4 5 6))

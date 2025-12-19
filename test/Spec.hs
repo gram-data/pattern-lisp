@@ -5,6 +5,8 @@ import qualified Lisp.ParserSpec
 import qualified Lisp.PrimitivesSpec
 import qualified Lisp.EvalSpec
 import qualified REPLSpec
+import qualified Properties
+import qualified ExamplesSpec
 
 main :: IO ()
 main = hspec $ do
@@ -13,4 +15,6 @@ main = hspec $ do
     Lisp.PrimitivesSpec.spec
     Lisp.EvalSpec.spec
     REPLSpec.spec
+    Properties.spec
+    ExamplesSpec.spec
 

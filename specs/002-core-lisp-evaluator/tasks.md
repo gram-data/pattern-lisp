@@ -230,22 +230,22 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T111 [P] [US5] Create test file test/Properties.hs with QuickCheck structure
-- [ ] T112 [P] [US5] Add Arbitrary instance for Expr in test/Properties.hs
-- [ ] T113 [P] [US5] Add Arbitrary instance for Value in test/Properties.hs
-- [ ] T114 [P] [US5] Add property test for substitution semantics in test/Properties.hs
-- [ ] T115 [P] [US5] Add property test for closure capturing lexical environment in test/Properties.hs
-- [ ] T116 [P] [US5] Add property test for evaluation order (arguments evaluated before application) in test/Properties.hs
-- [ ] T117 [P] [US5] Add property test for let binding shadowing in test/Properties.hs
-- [ ] T118 [P] [US5] Add property test for closure environment isolation in test/Properties.hs
-- [ ] T119 [US5] Update test/Spec.hs to include Properties tests
+- [x] T111 [P] [US5] Create test file test/Properties.hs with QuickCheck structure
+- [x] T112 [P] [US5] Add Arbitrary instance for Expr in test/Properties.hs
+- [x] T113 [P] [US5] Add Arbitrary instance for Value in test/Properties.hs
+- [x] T114 [P] [US5] Add property test for substitution semantics in test/Properties.hs
+- [x] T115 [P] [US5] Add property test for closure capturing lexical environment in test/Properties.hs
+- [x] T116 [P] [US5] Add property test for evaluation order (arguments evaluated before application) in test/Properties.hs
+- [x] T117 [P] [US5] Add property test for let binding shadowing in test/Properties.hs
+- [x] T118 [P] [US5] Add property test for closure environment isolation in test/Properties.hs
+- [x] T119 [US5] Update test/Spec.hs to include Properties tests
 
 ### Implementation for User Story 5
 
-- [ ] T120 [US5] Implement substitution function for expressions in test/Properties.hs (helper for property tests)
-- [ ] T121 [US5] Configure QuickCheck to run 1000+ test cases in test/Properties.hs
-- [ ] T122 [US5] Run property tests and verify all pass consistently
-- [ ] T123 [US5] Document property test results and edge cases found
+- [x] T120 [US5] Implement substitution function for expressions in test/Properties.hs (helper for property tests)
+- [x] T121 [US5] Configure QuickCheck to run 1000+ test cases in test/Properties.hs
+- [x] T122 [US5] Run property tests and verify all pass consistently
+- [x] T123 [US5] Document property test results and edge cases found
 
 **Checkpoint**: At this point, User Story 5 should be fully functional. Property-based tests verify interpreter correctness.
 
@@ -261,21 +261,21 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T124 [P] [US6] Create test file test/ExamplesSpec.hs with hspec structure
-- [ ] T125 [P] [US6] Add test for factorial example program in test/ExamplesSpec.hs
-- [ ] T126 [P] [US6] Add test for list operations example in test/ExamplesSpec.hs
-- [ ] T127 [US6] Update test/Spec.hs to include ExamplesSpec tests
+- [x] T124 [P] [US6] Create test file test/ExamplesSpec.hs with hspec structure
+- [x] T125 [P] [US6] Add test for factorial example program in test/ExamplesSpec.hs
+- [x] T126 [P] [US6] Add test for list operations example in test/ExamplesSpec.hs
+- [x] T127 [US6] Update test/Spec.hs to include ExamplesSpec tests
 
 ### Implementation for User Story 6
 
-- [ ] T128 [US6] Create examples/factorial.lisp with factorial function definition
-- [ ] T129 [US6] Create examples/lists.lisp demonstrating list operations
-- [ ] T130 [US6] Create examples/arithmetic.lisp demonstrating arithmetic operations
-- [ ] T131 [US6] Create examples/functions.lisp demonstrating function definitions and calls
-- [ ] T132 [US6] Create examples/conditionals.lisp demonstrating if expressions
-- [ ] T133 [US6] Create examples/scoping.lisp demonstrating let and closure scoping
-- [ ] T134 [US6] Add README.md in examples/ directory explaining example programs
-- [ ] T135 [US6] Run tests and verify all ExamplesSpec tests pass
+- [x] T128 [US6] Create examples/factorial.plisp with factorial function definition
+- [x] T129 [US6] Create examples/lists.plisp demonstrating list operations
+- [x] T130 [US6] Create examples/arithmetic.plisp demonstrating arithmetic operations
+- [x] T131 [US6] Create examples/functions.plisp demonstrating function definitions and calls
+- [x] T132 [US6] Create examples/conditionals.plisp demonstrating if expressions
+- [x] T133 [US6] Create examples/scoping.plisp demonstrating let and closure scoping
+- [x] T134 [US6] Add README.md in examples/ directory explaining example programs
+- [x] T135 [US6] Run tests and verify all ExamplesSpec tests pass
 
 **Checkpoint**: At this point, User Story 6 should be fully functional. Example programs demonstrate language capabilities.
 

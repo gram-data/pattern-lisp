@@ -5,7 +5,10 @@ import Lisp.Eval
 import Lisp.Primitives
 import Lisp.Syntax
 import System.IO
+import System.Environment
+import System.Exit
 import qualified Data.Text as T
+import Data.List (isPrefixOf)
 
 -- | Format a Value for display
 formatValue :: Value -> String
@@ -27,14 +30,50 @@ formatError (ArityMismatch name expected actual) =
 formatError (DivisionByZero _) = "Error: Division by zero"
 formatError (ParseError msg) = "Parse error: " ++ msg
 
+-- | Evaluate a multi-line program (wraps in begin form)
+evaluateProgram :: String -> Env -> Either Error (Value, Env)
+evaluateProgram programText initialEnv = do
+  -- Remove comment lines and empty lines, join with spaces
+  let nonCommentLines = filter (not . isCommentOrEmpty) (lines programText)
+      cleaned = unwords nonCommentLines
+  -- Wrap in begin form to handle multiple expressions with proper environment threading
+  let beginProgram = "(begin " ++ cleaned ++ ")"
+  expr <- parseExpr beginProgram
+  evalExprWithEnv expr initialEnv
+  where
+    isCommentOrEmpty line = 
+      let trimmed = trim line
+      in null trimmed || ";;" `isPrefixOf` trimmed
+    
+    trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
+
+-- | Load and evaluate a file
+loadFile :: FilePath -> Env -> IO (Env, Bool)
+loadFile filepath env = do
+  content <- readFile filepath
+  case evaluateProgram content env of
+    Left err -> do
+      hPutStrLn stderr (formatError err)
+      return (env, True)
+    Right (val, newEnv) -> do
+      putStrLn (formatValue val)
+      return (newEnv, True)
+
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
 processLine input env
   | input == ":quit" || input == ":q" = return (env, False)
   | input == ":help" || input == ":h" = do
       putStrLn "Pattern Lisp REPL"
-      putStrLn "Commands: :quit, :q, :help, :h"
+      putStrLn "Commands: :quit, :q, :help, :h, :load <file>"
       return (env, True)
+  | ":load" `isPrefixOf` input || ":l" `isPrefixOf` input = do
+      let filepath = trim (dropWhile (/= ' ') (dropWhile (== ' ') input))
+      if null filepath
+        then do
+          hPutStrLn stderr "Error: :load requires a file path"
+          return (env, True)
+        else loadFile filepath env
   | null (trim input) = return (env, True)
   | otherwise = case parseExpr input of
       Left err -> do
@@ -70,4 +109,21 @@ main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  repl initialEnv
+  args <- getArgs
+  case args of
+    [] -> repl initialEnv  -- Interactive REPL
+    [filepath] -> do
+      -- Load and execute file, then exit
+      content <- readFile filepath
+      case evaluateProgram content initialEnv of
+        Left err -> do
+          hPutStrLn stderr (formatError err)
+          exitFailure
+        Right (val, _) -> do
+          putStrLn (formatValue val)
+          return ()
+    _ -> do
+      hPutStrLn stderr "Usage: pattern-lisp [file.plisp]"
+      hPutStrLn stderr "  No arguments: Start interactive REPL"
+      hPutStrLn stderr "  One argument: Execute file and print result"
+      exitFailure

@@ -1,0 +1,7 @@
+;; Let bindings and closure scoping
+(let ((x 10) (y 20)) (+ x y))
+
+(define make-adder (lambda (n) (lambda (x) (+ x n))))
+(define add5 (make-adder 5))
+(add5 10)
+

@@ -35,7 +35,7 @@ evalWithEnv expr = do
   currentEnv <- ask
   -- Check if this is a define expression
   case expr of
-    List (Atom (Symbol "define"):[Atom (Symbol name), valueExpr]) -> do
+    List (Atom (Symbol "define"):Atom (Symbol name):valueExpr:[]) -> do
       val <- eval valueExpr
       let newEnv = Map.insert name val currentEnv
       local (const newEnv) $ do

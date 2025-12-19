@@ -1,0 +1,7 @@
+(define list1 '(1 2 3))
+(define list2 '(4 5 6))
+
+;; Note: List operations will be added in future phases
+;; For now, we can work with quoted lists
+list1
+

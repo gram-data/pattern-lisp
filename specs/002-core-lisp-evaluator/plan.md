@@ -99,7 +99,7 @@ pattern-lisp/
 │   │   └── PrimitivesSpec.hs
 │   └── Properties.hs    # Property-based tests
 ├── examples/
-│   └── *.lisp           # Example Lisp programs
+│   └── *.plisp          # Example Pattern Lisp programs
 ├── cabal.project
 └── pattern-lisp.cabal
 ```
