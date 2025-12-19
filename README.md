@@ -106,14 +106,62 @@ While this is a general-purpose portable Lisp, it was designed with specific use
 
 ## Current Status
 
-**Phase 0**: Project initialization
+**Phase 0**: Project initialization ✅ **COMPLETE**
 
 This is a research prototype exploring minimal, portable computation with:
 - Lisp as IR with precise semantics
 - Gram as structured serialization format
 - Clear reference implementation for porting to other runtimes
 
-See [TODO.md](TODO.md) for development roadmap.
+## Setup & Build
+
+### Prerequisites
+
+- **Cabal**: 3.10 or later
+- **GHC**: 9.6.3 (or compatible version)
+- **Git**: For dependency resolution (gram-hs from GitHub)
+
+### Initial Setup
+
+1. **Update Cabal index and resolve dependencies**:
+   ```bash
+   cabal update
+   ```
+
+2. **Build all components**:
+   ```bash
+   cabal build all
+   ```
+
+3. **Run tests**:
+   ```bash
+   cabal test
+   ```
+
+4. **Run the CLI executable**:
+   ```bash
+   cabal run pattern-lisp
+   ```
+
+### Project Structure
+
+```
+pattern-lisp/
+├── src/              # Library code (Lisp.* modules)
+├── app/              # CLI executable (Main.hs)
+├── test/             # Test suite
+├── examples/         # Example Lisp programs
+├── cabal.project     # Multi-package configuration
+└── pattern-lisp.cabal # Package definition
+```
+
+### Dependencies
+
+- **gram-hs**: Source repository dependency from GitHub (https://github.com/gram-data/gram-hs)
+- **Core libraries**: text, containers, megaparsec, mtl
+- **Testing**: hspec, QuickCheck
+
+See [pattern-agents-lisp-todo.md](pattern-agents-lisp-todo.md) for development roadmap.
 
 ## Related Work
 

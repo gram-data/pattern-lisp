@@ -1,0 +1,34 @@
+cabal-version:      3.0
+name:                pattern-lisp
+version:             0.1.0.0
+build-type:          Simple
+
+library
+  exposed-modules:     Lisp.Test
+  hs-source-dirs:      src
+  build-depends:       base >=4.18 && <5
+                     , text
+                     , containers
+                     , megaparsec
+                     , mtl
+                     , gram
+  default-language:    Haskell2010
+  ghc-options:         -Wall -Werror
+
+executable pattern-lisp
+  main-is:             Main.hs
+  hs-source-dirs:      app
+  build-depends:       base >=4.18 && <5
+                     , pattern-lisp
+  default-language:    Haskell2010
+
+test-suite pattern-lisp-test
+  type:                exitcode-stdio-1.0
+  main-is:             Spec.hs
+  hs-source-dirs:      test
+  build-depends:       base >=4.18 && <5
+                     , pattern-lisp
+                     , hspec
+                     , QuickCheck
+  default-language:    Haskell2010
+
