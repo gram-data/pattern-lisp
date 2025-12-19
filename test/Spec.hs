@@ -1,10 +1,12 @@
 module Main where
 
 import Test.Hspec
+import qualified Lisp.ParserSpec
+import qualified Lisp.PrimitivesSpec
 
 main :: IO ()
 main = hspec $ do
   describe "Pattern Lisp Test Suite" $ do
-    it "test framework is working" $ do
-      True `shouldBe` True
+    Lisp.ParserSpec.spec
+    Lisp.PrimitivesSpec.spec
 
