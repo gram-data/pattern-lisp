@@ -1,0 +1,30 @@
+# pattern-script Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2025-12-19
+
+## Active Technologies
+
+- Haskell with GHC 9.6.3 (see research.md for version selection rationale) + gram-hs (source repository from GitHub), text, containers, megaparsec, mtl, hspec, QuickCheck (001-pattern-lisp-init)
+
+## Project Structure
+
+```text
+backend/
+frontend/
+tests/
+```
+
+## Commands
+
+# Add commands for Haskell with GHC 9.6.3 (see research.md for version selection rationale)
+
+## Code Style
+
+Haskell with GHC 9.6.3 (see research.md for version selection rationale): Follow standard conventions
+
+## Recent Changes
+
+- 001-pattern-lisp-init: Added Haskell with GHC 9.6.3 (see research.md for version selection rationale) + gram-hs (source repository from GitHub), text, containers, megaparsec, mtl, hspec, QuickCheck
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
