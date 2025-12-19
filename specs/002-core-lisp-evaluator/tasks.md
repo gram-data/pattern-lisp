@@ -193,28 +193,28 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T092 [P] [US4] Create test file test/REPLSpec.hs with hspec structure
-- [ ] T093 [P] [US4] Add test for REPL parsing and evaluating simple expression in test/REPLSpec.hs
-- [ ] T094 [P] [US4] Add test for REPL handling define and using defined variable in test/REPLSpec.hs
-- [ ] T095 [P] [US4] Add test for REPL error handling (parse errors) in test/REPLSpec.hs
-- [ ] T096 [P] [US4] Add test for REPL error handling (evaluation errors) in test/REPLSpec.hs
-- [ ] T097 [P] [US4] Add test for REPL exit command in test/REPLSpec.hs
-- [ ] T098 [US4] Update test/Spec.hs to include REPLSpec tests
+- [x] T092 [P] [US4] Create test file test/REPLSpec.hs with hspec structure
+- [x] T093 [P] [US4] Add test for REPL parsing and evaluating simple expression in test/REPLSpec.hs
+- [x] T094 [P] [US4] Add test for REPL handling define and using defined variable in test/REPLSpec.hs
+- [x] T095 [P] [US4] Add test for REPL error handling (parse errors) in test/REPLSpec.hs
+- [x] T096 [P] [US4] Add test for REPL error handling (evaluation errors) in test/REPLSpec.hs
+- [x] T097 [P] [US4] Add test for REPL exit command in test/REPLSpec.hs
+- [x] T098 [US4] Update test/Spec.hs to include REPLSpec tests
 
 ### Implementation for User Story 4
 
-- [ ] T099 [US4] Create REPL loop function in app/Main.hs (read, eval, print)
-- [ ] T100 [US4] Implement prompt display and input reading in app/Main.hs
-- [ ] T101 [US4] Integrate parser (parseExpr) in REPL loop in app/Main.hs
-- [ ] T102 [US4] Integrate evaluator (evalExpr) in REPL loop in app/Main.hs
-- [ ] T103 [US4] Implement result printing to stdout in app/Main.hs
-- [ ] T104 [US4] Implement error printing to stderr in app/Main.hs
-- [ ] T105 [US4] Implement exit command handling (":quit", ":q") in app/Main.hs
-- [ ] T106 [US4] Implement help command handling (":help", ":h") in app/Main.hs
-- [ ] T107 [US4] Implement environment persistence across REPL iterations in app/Main.hs
-- [ ] T108 [US4] Handle EOF gracefully (Ctrl+D) in app/Main.hs
-- [ ] T109 [US4] Update main function to start REPL in app/Main.hs
-- [ ] T110 [US4] Run tests and verify all REPLSpec tests pass
+- [x] T099 [US4] Create REPL loop function in app/Main.hs (read, eval, print)
+- [x] T100 [US4] Implement prompt display and input reading in app/Main.hs
+- [x] T101 [US4] Integrate parser (parseExpr) in REPL loop in app/Main.hs
+- [x] T102 [US4] Integrate evaluator (evalExpr) in REPL loop in app/Main.hs
+- [x] T103 [US4] Implement result printing to stdout in app/Main.hs
+- [x] T104 [US4] Implement error printing to stderr in app/Main.hs
+- [x] T105 [US4] Implement exit command handling (":quit", ":q") in app/Main.hs
+- [x] T106 [US4] Implement help command handling (":help", ":h") in app/Main.hs
+- [x] T107 [US4] Implement environment persistence across REPL iterations in app/Main.hs
+- [x] T108 [US4] Handle EOF gracefully (Ctrl+D) in app/Main.hs
+- [x] T109 [US4] Update main function to start REPL in app/Main.hs
+- [x] T110 [US4] Run tests and verify all REPLSpec tests pass
 
 **Checkpoint**: At this point, User Story 4 should be fully functional. Interactive REPL works correctly.
 
