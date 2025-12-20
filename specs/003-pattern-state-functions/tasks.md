@@ -125,25 +125,25 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T056 [P] [US2] Create test file `test/PatternLisp/RuntimeSpec.hs` with module header and imports
-- [ ] T057 [P] [US2] Add test "valid tool: lambda with single state parameter" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T058 [P] [US2] Add test "invalid tool: wrong parameter count" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T059 [P] [US2] Add test "invalid tool: wrong parameter name" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T060 [P] [US2] Add test "invalid tool: not a lambda" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T061 [P] [US2] Add test "tool execution: identity tool returns same state" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T062 [P] [US2] Add test "tool execution: tool transforms state correctly" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T063 [P] [US2] Add test "tool execution: tool returns non-pattern should error" in `test/PatternLisp/RuntimeSpec.hs`
-- [ ] T064 [P] [US2] Add test "tool composition: sequential tool execution" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T056 [P] [US2] Create test file `test/PatternLisp/RuntimeSpec.hs` with module header and imports
+- [X] T057 [P] [US2] Add test "valid tool: lambda with single state parameter" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T058 [P] [US2] Add test "invalid tool: wrong parameter count" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T059 [P] [US2] Add test "invalid tool: wrong parameter name" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T060 [P] [US2] Add test "invalid tool: not a lambda" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T061 [P] [US2] Add test "tool execution: identity tool returns same state" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T062 [P] [US2] Add test "tool execution: tool transforms state correctly" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T063 [P] [US2] Add test "tool execution: tool returns non-pattern should error" in `test/PatternLisp/RuntimeSpec.hs`
+- [X] T064 [P] [US2] Add test "tool composition: sequential tool execution" in `test/PatternLisp/RuntimeSpec.hs`
 
 ### Implementation for User Story 2
 
-- [ ] T065 [US2] Create `src/PatternLisp/Runtime.hs` module with module header and exports
-- [ ] T066 [US2] Define `RuntimeState` type in `src/PatternLisp/Runtime.hs` with `environment :: Env` and `executionTrace :: [(String, Pattern Subject, Pattern Subject)]`
-- [ ] T067 [US2] Implement `validateTool :: Expr -> Env -> Either Error Value` in `src/PatternLisp/Runtime.hs` to check canonical form
-- [ ] T068 [US2] Implement `executeTool :: Value -> Pattern Subject -> Env -> Either Error (Pattern Subject)` in `src/PatternLisp/Runtime.hs`
-- [ ] T069 [US2] Add clear error messages for tool validation failures in `src/PatternLisp/Runtime.hs`
-- [ ] T070 [US2] Add error handling for non-Pattern tool results in `src/PatternLisp/Runtime.hs`
-- [ ] T071 [US2] Verify tool validation tests pass: `cabal test RuntimeSpec`
+- [X] T065 [US2] Create `src/PatternLisp/Runtime.hs` module with module header and exports
+- [X] T066 [US2] Define `RuntimeState` type in `src/PatternLisp/Runtime.hs` with `environment :: Env` and `executionTrace :: [(String, Pattern Subject, Pattern Subject)]`
+- [X] T067 [US2] Implement `validateTool :: Expr -> Env -> Either Error Value` in `src/PatternLisp/Runtime.hs` to check canonical form
+- [X] T068 [US2] Implement `executeTool :: Value -> Pattern Subject -> Env -> Either Error (Pattern Subject)` in `src/PatternLisp/Runtime.hs`
+- [X] T069 [US2] Add clear error messages for tool validation failures in `src/PatternLisp/Runtime.hs`
+- [X] T070 [US2] Add error handling for non-Pattern tool results in `src/PatternLisp/Runtime.hs`
+- [X] T071 [US2] Verify tool validation tests pass: `cabal test RuntimeSpec`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. Tools can be validated and executed with state transformations.
 
