@@ -1,15 +1,15 @@
-module Lisp.PrimitivesSpec (spec) where
+module PatternLisp.PrimitivesSpec (spec) where
 
 import Test.Hspec
-import Lisp.Syntax
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
+import PatternLisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
 import qualified Data.Text as T
 import qualified Data.Map as Map
 
 spec :: Spec
-spec = describe "Lisp.Primitives and Lisp.Eval" $ do
+spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
   describe "Arithmetic operations" $ do
     it "evaluates addition (+ 1 2 3)" $ do
       case parseExpr "(+ 1 2 3)" of

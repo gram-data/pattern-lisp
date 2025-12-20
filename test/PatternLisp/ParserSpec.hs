@@ -1,12 +1,12 @@
-module Lisp.ParserSpec (spec) where
+module PatternLisp.ParserSpec (spec) where
 
 import Test.Hspec
-import Lisp.Syntax
-import Lisp.Parser
+import PatternLisp.Syntax
+import PatternLisp.Parser
 import qualified Data.Text as T
 
 spec :: Spec
-spec = describe "Lisp.Parser" $ do
+spec = describe "PatternLisp.Parser" $ do
   describe "parseExpr" $ do
     it "parses simple S-expression \"(+ 1 2)\"" $ do
       parseExpr "(+ 1 2)" `shouldBe` Right (List [Atom (Symbol "+"), Atom (Number 1), Atom (Number 2)])

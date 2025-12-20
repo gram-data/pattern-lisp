@@ -1,9 +1,9 @@
 module Main where
 
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
-import Lisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
+import PatternLisp.Syntax
 import System.IO
 import System.Environment
 import System.Exit

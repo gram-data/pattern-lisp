@@ -4,10 +4,10 @@ version:             0.1.0.0
 build-type:          Simple
 
 library
-  exposed-modules:     Lisp.Syntax
-                     , Lisp.Parser
-                     , Lisp.Eval
-                     , Lisp.Primitives
+  exposed-modules:     PatternLisp.Syntax
+                     , PatternLisp.Parser
+                     , PatternLisp.Eval
+                     , PatternLisp.Primitives
   hs-source-dirs:      src
   build-depends:       base >=4.18 && <5
                      , text
@@ -15,6 +15,7 @@ library
                      , megaparsec
                      , mtl
                      , gram
+                     -- , gram-data  -- TODO: Add in Phase 2 when implementing Pattern Subject support
   default-language:    Haskell2010
   ghc-options:         -Wall -Werror
 

@@ -26,18 +26,18 @@
 
 **Purpose**: Project initialization, module reorganization, and dependency setup
 
-- [ ] T001 Create `src/PatternLisp/` directory structure
-- [ ] T002 [P] Move `src/Lisp/Syntax.hs` to `src/PatternLisp/Syntax.hs` and update module declaration
-- [ ] T003 [P] Move `src/Lisp/Parser.hs` to `src/PatternLisp/Parser.hs` and update module declaration
-- [ ] T004 [P] Move `src/Lisp/Eval.hs` to `src/PatternLisp/Eval.hs` and update module declaration
-- [ ] T005 [P] Move `src/Lisp/Primitives.hs` to `src/PatternLisp/Primitives.hs` and update module declaration
-- [ ] T006 [P] Move test files from `test/Lisp/` to `test/PatternLisp/` and update module declarations
-- [ ] T007 Update all imports across codebase to use `PatternLisp.*` namespace
-- [ ] T008 Update `pattern-lisp.cabal` exposed-modules to reflect new module structure
-- [ ] T009 Update `app/Main.hs` imports to use `PatternLisp.*` modules
-- [ ] T010 Add gram-data dependency to `pattern-lisp.cabal` build-depends section
-- [ ] T011 Verify build: `cabal build all`
-- [ ] T012 Verify existing tests still pass: `cabal test`
+- [X] T001 Create `src/PatternLisp/` directory structure
+- [X] T002 [P] Move `src/Lisp/Syntax.hs` to `src/PatternLisp/Syntax.hs` and update module declaration
+- [X] T003 [P] Move `src/Lisp/Parser.hs` to `src/PatternLisp/Parser.hs` and update module declaration
+- [X] T004 [P] Move `src/Lisp/Eval.hs` to `src/PatternLisp/Eval.hs` and update module declaration
+- [X] T005 [P] Move `src/Lisp/Primitives.hs` to `src/PatternLisp/Primitives.hs` and update module declaration
+- [X] T006 [P] Move test files from `test/Lisp/` to `test/PatternLisp/` and update module declarations
+- [X] T007 Update all imports across codebase to use `PatternLisp.*` namespace
+- [X] T008 Update `pattern-lisp.cabal` exposed-modules to reflect new module structure
+- [X] T009 Update `app/Main.hs` imports to use `PatternLisp.*` modules
+- [X] T010 Add gram-data dependency to `pattern-lisp.cabal` build-depends section (commented out for now, will be enabled in Phase 2)
+- [X] T011 Verify build: `cabal build all`
+- [X] T012 Verify existing tests still pass: `cabal test`
 
 **Checkpoint**: Module reorganization complete, project builds successfully
 

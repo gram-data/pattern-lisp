@@ -1,4 +1,4 @@
-module Lisp.Test where
+module PatternLisp.Test where
 
 -- Minimal library module placeholder to verify library builds
 -- This will be replaced with actual Lisp modules in subsequent phases

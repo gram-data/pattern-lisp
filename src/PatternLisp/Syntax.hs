@@ -15,7 +15,7 @@
 -- * 'Error': Evaluation and parsing errors
 --
 -- All types derive 'Eq' and 'Show' for testing and debugging.
-module Lisp.Syntax
+module PatternLisp.Syntax
   ( Expr(..)
   , Atom(..)
   , Value(..)

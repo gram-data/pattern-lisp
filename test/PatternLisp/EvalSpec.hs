@@ -1,15 +1,15 @@
-module Lisp.EvalSpec (spec) where
+module PatternLisp.EvalSpec (spec) where
 
 import Test.Hspec
-import Lisp.Syntax
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
+import PatternLisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
 import qualified Data.Text as T
 import qualified Data.Map as Map
 
 spec :: Spec
-spec = describe "Lisp.Eval - Core Language Forms" $ do
+spec = describe "PatternLisp.Eval - Core Language Forms" $ do
   describe "Lambda expressions" $ do
     it "evaluates lambda expression ((lambda (x) (+ x 1)) 5)" $ do
       case parseExpr "((lambda (x) (+ x 1)) 5)" of

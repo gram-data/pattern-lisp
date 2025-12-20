@@ -1,10 +1,10 @@
 module IntegrationSpec (spec) where
 
 import Test.Hspec
-import Lisp.Syntax
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
+import PatternLisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
 import qualified Data.Text as T
 
 -- | Integration tests that combine parser, evaluator, and REPL functionality

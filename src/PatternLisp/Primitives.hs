@@ -11,18 +11,18 @@
 --
 -- Example usage:
 --
--- > import Lisp.Primitives
--- > import Lisp.Eval
--- > import Lisp.Parser
+-- > import PatternLisp.Primitives
+-- > import PatternLisp.Eval
+-- > import PatternLisp.Parser
 -- >
 -- > case parseExpr "(+ 1 2)" of
 -- >   Right expr -> evalExpr expr initialEnv
 -- >   Left err -> Left err
-module Lisp.Primitives
+module PatternLisp.Primitives
   ( initialEnv
   ) where
 
-import Lisp.Syntax
+import PatternLisp.Syntax
 import qualified Data.Map as Map
 
 -- | Initial environment with all primitive functions registered.

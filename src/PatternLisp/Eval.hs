@@ -12,21 +12,21 @@
 --
 -- Example usage:
 --
--- > import Lisp.Parser
--- > import Lisp.Eval
--- > import Lisp.Primitives
+-- > import PatternLisp.Parser
+-- > import PatternLisp.Eval
+-- > import PatternLisp.Primitives
 -- >
 -- > case parseExpr "(+ 1 2)" of
 -- >   Left err -> print err
 -- >   Right expr -> case evalExpr expr initialEnv of
 -- >     Left err -> print err
 -- >     Right val -> print val
-module Lisp.Eval
+module PatternLisp.Eval
   ( evalExpr
   , evalExprWithEnv
   ) where
 
-import Lisp.Syntax
+import PatternLisp.Syntax
 import qualified Data.Map as Map
 import Control.Monad.Reader
 import Control.Monad.Except
