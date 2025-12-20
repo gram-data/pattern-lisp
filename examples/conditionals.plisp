@@ -1,0 +1,5 @@
+;; Conditional expressions
+(if (> 5 3) 10 20)
+(if (< 5 3) 10 20)
+(if (= 5 5) "equal" "not equal")
+

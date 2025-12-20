@@ -106,12 +106,18 @@ While this is a general-purpose portable Lisp, it was designed with specific use
 
 ## Current Status
 
-**Phase 0**: Project initialization ✅ **COMPLETE**
+**Phase 1**: Core Lisp Evaluator ✅ **COMPLETE**
 
-This is a research prototype exploring minimal, portable computation with:
-- Lisp as IR with precise semantics
-- Gram as structured serialization format
-- Clear reference implementation for porting to other runtimes
+The core interpreter is fully functional with:
+- ✅ S-expression parser with position-aware error messages
+- ✅ Environment-based evaluator with lexical scoping
+- ✅ Core language forms: `lambda`, `if`, `let`, `quote`, `begin`, `define`
+- ✅ Primitive functions: arithmetic, comparison, string operations
+- ✅ Interactive REPL with file loading support
+- ✅ Comprehensive test suite (unit, property-based, integration)
+- ✅ Example programs demonstrating language features
+
+See [Quickstart Guide](specs/002-core-lisp-evaluator/quickstart.md) for detailed usage instructions.
 
 ## Setup & Build
 
@@ -140,8 +146,58 @@ This is a research prototype exploring minimal, portable computation with:
 
 4. **Run the CLI executable**:
    ```bash
+   # Start interactive REPL
    cabal run pattern-lisp
+   
+   # Or execute a file directly
+   cabal run pattern-lisp -- examples/functions.plisp
    ```
+
+## Quick Start
+
+### Interactive REPL
+
+Start the REPL and try some expressions:
+
+```bash
+$ cabal run pattern-lisp
+> (+ 1 2)
+3
+> (define square (lambda (x) (* x x)))
+square
+> (square 4)
+16
+> :quit
+```
+
+### Execute Example Programs
+
+Run example programs from the `examples/` directory:
+
+```bash
+# Run a function example
+cabal run pattern-lisp -- examples/functions.plisp
+
+# Run a list example
+cabal run pattern-lisp -- examples/lists.plisp
+```
+
+### Using as a Library
+
+```haskell
+import Lisp.Parser
+import Lisp.Eval
+import Lisp.Primitives
+
+main = do
+  case parseExpr "(+ 1 2)" of
+    Left err -> print err
+    Right expr -> case evalExpr expr initialEnv of
+      Left err -> print err
+      Right val -> print val  -- Output: VNumber 3
+```
+
+For more examples and detailed usage, see the [Quickstart Guide](specs/002-core-lisp-evaluator/quickstart.md).
 
 ### Project Structure
 
@@ -161,7 +217,15 @@ pattern-lisp/
 - **Core libraries**: text, containers, megaparsec, mtl
 - **Testing**: hspec, QuickCheck
 
-See [pattern-agents-lisp-todo.md](pattern-agents-lisp-todo.md) for development roadmap.
+## Documentation
+
+- **[Quickstart Guide](specs/002-core-lisp-evaluator/quickstart.md)**: Get started with Pattern Lisp
+- **[Feature Specification](specs/002-core-lisp-evaluator/spec.md)**: Complete feature requirements
+- **[Implementation Plan](specs/002-core-lisp-evaluator/plan.md)**: Technical implementation details
+- **[Examples](examples/README.md)**: Example programs demonstrating language features
+- **[Development Roadmap](TODO.md)**: Future development phases
+
+See [TODO.md](TODO.md) for the complete development roadmap.
 
 ## Related Work
 

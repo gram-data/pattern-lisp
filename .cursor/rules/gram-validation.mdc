@@ -1,0 +1,29 @@
+# Gram Syntax Validation Rules
+
+## Validation Requirement
+- **Always** validate gram notation syntax using `gram-lint` CLI tool
+- Run validation on any `.gram` file before considering it complete
+- All gram examples must pass `gram-lint` syntax checks
+
+## Usage
+```bash
+gram-lint path/to/file.gram
+```
+
+## When to Validate
+- Before committing changes to `.gram` files
+- When creating new gram examples in tests or documentation
+- When modifying existing gram notation
+- As part of code review process
+
+## Examples
+All gram syntax in these locations must be validated:
+- `specs/**/*.gram` - Specification examples
+- `docs/**/*.gram` - Documentation examples  
+- `tests/**/*.gram` - Test fixtures
+- Any inline gram notation in code comments or documentation
+
+## Integration
+- When writing or modifying gram notation, verify syntax with `gram-lint` to ensure correctness
+- All gram examples in code, tests, and documentation should pass `gram-lint` validation
+- If `gram-lint` reports errors, fix the syntax before proceeding
