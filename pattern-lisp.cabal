@@ -8,6 +8,7 @@ library
                      , PatternLisp.Parser
                      , PatternLisp.Eval
                      , PatternLisp.Primitives
+                     , PatternLisp.PatternPrimitives
   hs-source-dirs:      src
   build-depends:       base >=4.18 && <5
                      , text
@@ -15,7 +16,8 @@ library
                      , megaparsec
                      , mtl
                      , gram
-                     -- , gram-data  -- TODO: Add in Phase 2 when implementing Pattern Subject support
+                     , pattern
+                     , subject
   default-language:    Haskell2010
   ghc-options:         -Wall -Werror
 

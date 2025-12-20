@@ -27,6 +27,7 @@ module PatternLisp.Eval
   ) where
 
 import PatternLisp.Syntax
+import PatternLisp.PatternPrimitives
 import qualified Data.Map as Map
 import Control.Monad.Reader
 import Control.Monad.Except
@@ -195,6 +196,23 @@ applyPrimitive Substring args = case args of
       then throwError $ TypeMismatch "Invalid substring indices" (VList [])
       else return $ VString $ T.take (endIdx - startIdx) $ T.drop startIdx str
   _ -> throwError $ ArityMismatch "substring" 3 (length args)
+applyPrimitive PatternCreate args = case args of
+  [val] -> evalPatternCreate val
+  _ -> throwError $ ArityMismatch "pattern" 1 (length args)
+applyPrimitive PatternWith args = case args of
+  [decoration, VList elements] -> evalPatternWith decoration elements
+  [_, _] -> throwError $ TypeMismatch "pattern-with expects list of elements as second argument" (VList [])
+  _ -> throwError $ ArityMismatch "pattern-with" 2 (length args)
+-- Pattern query and predicate primitives will be implemented in later phases
+applyPrimitive PatternValue _ = throwError $ TypeMismatch "pattern-value not yet implemented" (VList [])
+applyPrimitive PatternElements _ = throwError $ TypeMismatch "pattern-elements not yet implemented" (VList [])
+applyPrimitive PatternLength _ = throwError $ TypeMismatch "pattern-length not yet implemented" (VList [])
+applyPrimitive PatternSize _ = throwError $ TypeMismatch "pattern-size not yet implemented" (VList [])
+applyPrimitive PatternDepth _ = throwError $ TypeMismatch "pattern-depth not yet implemented" (VList [])
+applyPrimitive PatternValues _ = throwError $ TypeMismatch "pattern-values not yet implemented" (VList [])
+applyPrimitive PatternFind _ = throwError $ TypeMismatch "pattern-find not yet implemented" (VList [])
+applyPrimitive PatternAny _ = throwError $ TypeMismatch "pattern-any? not yet implemented" (VList [])
+applyPrimitive PatternAll _ = throwError $ TypeMismatch "pattern-all? not yet implemented" (VList [])
 
 -- | Apply a closure (extend captured environment with arguments)
 applyClosure :: Closure -> [Value] -> EvalM Value

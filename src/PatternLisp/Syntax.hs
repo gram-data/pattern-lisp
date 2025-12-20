@@ -23,10 +23,14 @@ module PatternLisp.Syntax
   , Primitive(..)
   , Env
   , Error(..)
+  , primitiveName
+  , primitiveFromName
   ) where
 
 import Data.Map (Map)
 import Data.Text (Text)
+import Subject.Core (Subject)
+import Pattern (Pattern)
 
 -- | Abstract syntax tree representation of Lisp expressions
 data Expr
@@ -49,6 +53,7 @@ data Value
   | VString Text              -- ^ String values
   | VBool Bool                -- ^ Boolean values
   | VList [Value]             -- ^ List values
+  | VPattern (Pattern Subject)  -- ^ Pattern values with Subject decoration
   | VClosure Closure          -- ^ Function closures
   | VPrimitive Primitive       -- ^ Built-in primitive functions
   deriving (Eq, Show)
@@ -66,6 +71,20 @@ data Primitive
   = Add | Sub | Mul | Div           -- ^ Arithmetic
   | Gt | Lt | Eq | Ne               -- ^ Comparison
   | StringAppend | StringLength | Substring  -- ^ String operations
+  -- Pattern construction
+  | PatternCreate      -- ^ (pattern value)
+  | PatternWith        -- ^ (pattern-with value elements)
+  -- Pattern queries
+  | PatternValue       -- ^ (pattern-value p)
+  | PatternElements   -- ^ (pattern-elements p)
+  | PatternLength      -- ^ (pattern-length p)
+  | PatternSize        -- ^ (pattern-size p)
+  | PatternDepth       -- ^ (pattern-depth p)
+  | PatternValues      -- ^ (pattern-values p)
+  -- Pattern predicates
+  | PatternFind        -- ^ (pattern-find p pred)
+  | PatternAny        -- ^ (pattern-any? p pred)
+  | PatternAll         -- ^ (pattern-all? p pred)
   deriving (Eq, Show)
 
 -- | Environment mapping variable names to values
@@ -79,4 +98,55 @@ data Error
   | DivisionByZero Expr              -- ^ Division by zero (expression context)
   | ParseError String                -- ^ Parse error with message (includes position info from parser)
   deriving (Eq, Show)
+
+-- | Convert a Primitive to its string name for serialization
+primitiveName :: Primitive -> String
+primitiveName Add = "+"
+primitiveName Sub = "-"
+primitiveName Mul = "*"
+primitiveName Div = "/"
+primitiveName Gt = ">"
+primitiveName Lt = "<"
+primitiveName Eq = "="
+primitiveName Ne = "/="
+primitiveName StringAppend = "string-append"
+primitiveName StringLength = "string-length"
+primitiveName Substring = "substring"
+primitiveName PatternCreate = "pattern"
+primitiveName PatternWith = "pattern-with"
+primitiveName PatternValue = "pattern-value"
+primitiveName PatternElements = "pattern-elements"
+primitiveName PatternLength = "pattern-length"
+primitiveName PatternSize = "pattern-size"
+primitiveName PatternDepth = "pattern-depth"
+primitiveName PatternValues = "pattern-values"
+primitiveName PatternFind = "pattern-find"
+primitiveName PatternAny = "pattern-any?"
+primitiveName PatternAll = "pattern-all?"
+
+-- | Look up a Primitive by its string name (for deserialization)
+primitiveFromName :: String -> Maybe Primitive
+primitiveFromName "+" = Just Add
+primitiveFromName "-" = Just Sub
+primitiveFromName "*" = Just Mul
+primitiveFromName "/" = Just Div
+primitiveFromName ">" = Just Gt
+primitiveFromName "<" = Just Lt
+primitiveFromName "=" = Just Eq
+primitiveFromName "/=" = Just Ne
+primitiveFromName "string-append" = Just StringAppend
+primitiveFromName "string-length" = Just StringLength
+primitiveFromName "substring" = Just Substring
+primitiveFromName "pattern" = Just PatternCreate
+primitiveFromName "pattern-with" = Just PatternWith
+primitiveFromName "pattern-value" = Just PatternValue
+primitiveFromName "pattern-elements" = Just PatternElements
+primitiveFromName "pattern-length" = Just PatternLength
+primitiveFromName "pattern-size" = Just PatternSize
+primitiveFromName "pattern-depth" = Just PatternDepth
+primitiveFromName "pattern-values" = Just PatternValues
+primitiveFromName "pattern-find" = Just PatternFind
+primitiveFromName "pattern-any?" = Just PatternAny
+primitiveFromName "pattern-all?" = Just PatternAll
+primitiveFromName _ = Nothing
 

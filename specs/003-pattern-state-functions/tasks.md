@@ -35,7 +35,7 @@
 - [X] T007 Update all imports across codebase to use `PatternLisp.*` namespace
 - [X] T008 Update `pattern-lisp.cabal` exposed-modules to reflect new module structure
 - [X] T009 Update `app/Main.hs` imports to use `PatternLisp.*` modules
-- [X] T010 Add gram-data dependency to `pattern-lisp.cabal` build-depends section (commented out for now, will be enabled in Phase 2)
+- [X] T010 Add gram-data dependencies (`pattern` and `subject`) to `pattern-lisp.cabal` build-depends section
 - [X] T011 Verify build: `cabal build all`
 - [X] T012 Verify existing tests still pass: `cabal test`
 
@@ -49,20 +49,20 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T013 Import `Gram.Subject (Subject)` and `Pattern.Core (Pattern)` in `src/PatternLisp/Syntax.hs`
-- [ ] T014 Add `VPattern (Pattern Subject)` constructor to `Value` type in `src/PatternLisp/Syntax.hs`
-- [ ] T015 Add pattern primitive constructors to `Primitive` type in `src/PatternLisp/Syntax.hs` (PatternCreate, PatternWith, PatternValue, PatternElements, PatternLength, PatternSize, PatternDepth, PatternValues, PatternFind, PatternAny, PatternAll)
-- [ ] T016 Implement `primitiveName :: Primitive -> String` function in `src/PatternLisp/Syntax.hs`
-- [ ] T017 Implement `primitiveFromName :: String -> Maybe Primitive` function in `src/PatternLisp/Syntax.hs`
-- [ ] T018 Create `src/PatternLisp/PatternPrimitives.hs` module with module header and exports
-- [ ] T019 Implement `evalPatternCreate :: Value -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T020 Implement `evalPatternWith :: Value -> [Value] -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T021 Import `PatternLisp.PatternPrimitives` in `src/PatternLisp/Eval.hs`
-- [ ] T022 Add `applyPrimitive PatternCreate` case in `src/PatternLisp/Eval.hs` to call `PatternPrimitives.evalPatternCreate`
-- [ ] T023 Add `applyPrimitive PatternWith` case in `src/PatternLisp/Eval.hs` to call `PatternPrimitives.evalPatternWith`
-- [ ] T024 Add pattern primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern" → PatternCreate, "pattern-with" → PatternWith)
-- [ ] T025 Verify types compile: `cabal build`
-- [ ] T026 Test basic pattern construction in REPL: `(pattern "hello")` and `(pattern-with "root" (list))`
+- [X] T013 Import `Subject.Core (Subject)` and `Pattern (Pattern)` in `src/PatternLisp/Syntax.hs` (Note: using correct module names from gram-hs)
+- [X] T014 Add `VPattern (Pattern Subject)` constructor to `Value` type in `src/PatternLisp/Syntax.hs`
+- [X] T015 Add pattern primitive constructors to `Primitive` type in `src/PatternLisp/Syntax.hs` (PatternCreate, PatternWith, PatternValue, PatternElements, PatternLength, PatternSize, PatternDepth, PatternValues, PatternFind, PatternAny, PatternAll)
+- [X] T016 Implement `primitiveName :: Primitive -> String` function in `src/PatternLisp/Syntax.hs`
+- [X] T017 Implement `primitiveFromName :: String -> Maybe Primitive` function in `src/PatternLisp/Syntax.hs`
+- [X] T018 Create `src/PatternLisp/PatternPrimitives.hs` module with module header and exports
+- [X] T019 Implement `evalPatternCreate :: Value -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T020 Implement `evalPatternWith :: Value -> [Value] -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T021 Import `PatternLisp.PatternPrimitives` in `src/PatternLisp/Eval.hs`
+- [X] T022 Add `applyPrimitive PatternCreate` case in `src/PatternLisp/Eval.hs` to call `PatternPrimitives.evalPatternCreate`
+- [X] T023 Add `applyPrimitive PatternWith` case in `src/PatternLisp/Eval.hs` to call `PatternPrimitives.evalPatternWith`
+- [X] T024 Add pattern primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern" → PatternCreate, "pattern-with" → PatternWith)
+- [X] T025 Verify types compile: `cabal build`
+- [X] T026 Test basic pattern construction: Added tests in `test/PatternLisp/PrimitivesSpec.hs` and fixed REPL `formatValue` to handle `VPattern`
 
 **Checkpoint**: Foundation ready - Pattern values can be created, basic pattern operations available. User story implementation can now begin.
 

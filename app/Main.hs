@@ -17,6 +17,7 @@ formatValue (VString s) = T.unpack s
 formatValue (VBool True) = "#t"
 formatValue (VBool False) = "#f"
 formatValue (VList vals) = "(" ++ unwords (map formatValue vals) ++ ")"
+formatValue (VPattern _) = "<pattern>"
 formatValue (VClosure _) = "<closure>"
 formatValue (VPrimitive _) = "<primitive>"
 

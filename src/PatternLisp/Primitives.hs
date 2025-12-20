@@ -5,6 +5,7 @@
 -- * Arithmetic: +, -, *, /
 -- * Comparison: >, <, =, /=
 -- * String operations: string-append, string-length, substring
+-- * Pattern construction: pattern, pattern-with
 --
 -- The initial environment is used as the starting point for evaluation
 -- and can be extended with user-defined bindings via 'define'.
@@ -45,5 +46,7 @@ initialEnv = Map.fromList
   , ("string-append", VPrimitive StringAppend)
   , ("string-length", VPrimitive StringLength)
   , ("substring", VPrimitive Substring)
+  , ("pattern", VPrimitive PatternCreate)
+  , ("pattern-with", VPrimitive PatternWith)
   ]
 

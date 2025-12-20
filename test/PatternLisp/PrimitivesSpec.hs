@@ -122,4 +122,51 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Left (ArityMismatch _ _ _) -> True `shouldBe` True
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected ArityMismatch error"
+  
+  describe "Pattern construction operations" $ do
+    it "evaluates pattern construction (pattern \"hello\")" $ do
+      case parseExpr "(pattern \"hello\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> case val of
+            VPattern _ -> True `shouldBe` True
+            _ -> fail $ "Expected VPattern, got: " ++ show val
+    
+    it "evaluates pattern-with construction (pattern-with \"root\" '())" $ do
+      case parseExpr "(pattern-with \"root\" '())" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> case val of
+            VPattern _ -> True `shouldBe` True
+            _ -> fail $ "Expected VPattern, got: " ++ show val
+    
+    -- Note: Testing pattern-with with multiple elements requires list construction
+    -- primitives that aren't yet available. This will be tested more comprehensively
+    -- in Phase 3 when pattern query operations are implemented.
+    
+    it "handles pattern arity mismatch" $ do
+      case parseExpr "(pattern)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left (ArityMismatch _ _ _) -> True `shouldBe` True
+          Left err -> fail $ "Unexpected error: " ++ show err
+          Right _ -> fail "Expected ArityMismatch error"
+    
+    it "handles pattern-with arity mismatch" $ do
+      case parseExpr "(pattern-with \"root\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left (ArityMismatch _ _ _) -> True `shouldBe` True
+          Left err -> fail $ "Unexpected error: " ++ show err
+          Right _ -> fail "Expected ArityMismatch error"
+    
+    it "handles pattern-with type error for non-list second argument" $ do
+      case parseExpr "(pattern-with \"root\" \"not-a-list\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left (TypeMismatch _ _) -> True `shouldBe` True
+          Left err -> fail $ "Unexpected error: " ++ show err
+          Right _ -> fail "Expected TypeMismatch error"
 
