@@ -30,6 +30,10 @@ formatError (ArityMismatch name expected actual) =
 formatError (DivisionByZero _) = "Error: Division by zero"
 formatError (ParseError msg) = "Parse error: " ++ msg
 
+-- | Trim whitespace from both ends of a string
+trim :: String -> String
+trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
+
 -- | Evaluate a multi-line program (wraps in begin form)
 evaluateProgram :: String -> Env -> Either Error (Value, Env)
 evaluateProgram programText initialEnv = do
@@ -44,8 +48,6 @@ evaluateProgram programText initialEnv = do
     isCommentOrEmpty line = 
       let trimmed = trim line
       in null trimmed || ";;" `isPrefixOf` trimmed
-    
-    trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
 
 -- | Load and evaluate a file
 loadFile :: FilePath -> Env -> IO (Env, Bool)
@@ -86,8 +88,6 @@ processLine input env
         Right (val, newEnv) -> do
           putStrLn (formatValue val)
           return (newEnv, True)
-  where
-    trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
 
 -- | Main REPL loop
 repl :: Env -> IO ()
