@@ -247,11 +247,9 @@ evalBegin (expr:rest) = do
   -- Evaluate first expression, which may modify environment
   result <- evalWithEnv expr
   -- Update environment for remaining expressions
-  local (const (evalEnv result)) $ do
+  local (const (evalEnv result)) $
     -- Continue with remaining expressions
-    if null rest
-      then return (evalValue result)
-      else evalBegin rest
+    evalBegin rest
 
 -- | Evaluate define form: (define name value)
 -- Note: This modifies the environment using local, which affects subsequent evaluations
