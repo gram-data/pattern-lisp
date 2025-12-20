@@ -1,5 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | S-expression parser for Pattern Lisp using Megaparsec.
+--
+-- This module provides parsing functionality to convert S-expression strings
+-- into abstract syntax tree (AST) representations. The parser handles:
+-- * Atoms: symbols, numbers, strings, booleans
+-- * Lists: S-expressions with parentheses
+-- * Quotes: both (quote ...) and '... syntax
+--
+-- Error messages include position information from Megaparsec, making it
+-- easy to locate syntax errors in source code.
+--
+-- Example usage:
+--
+-- > import Lisp.Parser
+-- >
+-- > case parseExpr "(+ 1 2)" of
+-- >   Left (ParseError msg) -> putStrLn $ "Parse error: " ++ msg
+-- >   Right expr -> print expr
 module Lisp.Parser
   ( parseExpr
   ) where
@@ -17,7 +35,19 @@ type Parser = Parsec Void String
 skipSpace :: Parser ()
 skipSpace = L.space space1 empty empty
 
--- | Parse an S-expression string into an Expr
+-- | Parse an S-expression string into an Expr.
+--
+-- This function parses a complete S-expression from a string, returning
+-- either a parse error (with position information) or a successfully parsed
+-- expression. The parser expects exactly one expression and will fail if
+-- there is trailing input after the expression.
+--
+-- Error messages include:
+-- * Line and column position of the error
+-- * Context showing what was expected
+-- * The actual input that caused the error
+--
+-- @since 0.1.0.0
 parseExpr :: String -> Either Error Expr
 parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
   Left err -> Left (ParseError (errorBundlePretty err))

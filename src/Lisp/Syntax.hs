@@ -1,6 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
+-- | Core data types for Pattern Lisp interpreter.
+--
+-- This module defines the abstract syntax tree (Expr), runtime values (Value),
+-- and related types used throughout the interpreter. It serves as the foundation
+-- for both parsing and evaluation.
+--
+-- Key types:
+-- * 'Expr': Abstract syntax tree representation of Lisp code
+-- * 'Value': Runtime values that expressions evaluate to
+-- * 'Closure': Function closures that capture their lexical environment
+-- * 'Env': Environment mapping variable names to values
+-- * 'Error': Evaluation and parsing errors
+--
+-- All types derive 'Eq' and 'Show' for testing and debugging.
 module Lisp.Syntax
   ( Expr(..)
   , Atom(..)
@@ -59,10 +73,10 @@ type Env = Map String Value
 
 -- | Evaluation and parsing errors
 data Error
-  = UndefinedVar String Expr         -- ^ Undefined variable
-  | TypeMismatch String Value        -- ^ Type mismatch in operation
-  | ArityMismatch String Int Int     -- ^ Function called with wrong number of args
-  | DivisionByZero Expr              -- ^ Division by zero
-  | ParseError String                -- ^ Parse error with message
+  = UndefinedVar String Expr         -- ^ Undefined variable (name, expression context)
+  | TypeMismatch String Value        -- ^ Type mismatch in operation (message, actual value)
+  | ArityMismatch String Int Int     -- ^ Function called with wrong number of args (name, expected, actual)
+  | DivisionByZero Expr              -- ^ Division by zero (expression context)
+  | ParseError String                -- ^ Parse error with message (includes position info from parser)
   deriving (Eq, Show)
 

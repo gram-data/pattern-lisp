@@ -1,3 +1,26 @@
+-- | Core Lisp evaluator implementing environment-based evaluation with lexical scoping.
+--
+-- This module provides the main evaluation functions for Pattern Lisp expressions.
+-- Evaluation uses a Reader monad transformer to thread the environment through
+-- computations, and an Except monad for error handling.
+--
+-- Key features:
+-- * Environment-based evaluation with lexical scoping
+-- * Support for closures that capture their lexical environment
+-- * Special form handling (lambda, if, let, quote, begin, define)
+-- * Primitive function application with type and arity checking
+--
+-- Example usage:
+--
+-- > import Lisp.Parser
+-- > import Lisp.Eval
+-- > import Lisp.Primitives
+-- >
+-- > case parseExpr "(+ 1 2)" of
+-- >   Left err -> print err
+-- >   Right expr -> case evalExpr expr initialEnv of
+-- >     Left err -> print err
+-- >     Right val -> print val
 module Lisp.Eval
   ( evalExpr
   , evalExprWithEnv
@@ -19,11 +42,23 @@ data EvalResult = EvalResult
   , evalEnv :: Env
   }
 
--- | Evaluate an expression in an environment, returning the value
+-- | Evaluate an expression in an environment, returning the value.
+--
+-- This function evaluates a single expression and returns its value.
+-- The environment is not modified (use 'evalExprWithEnv' if you need
+-- environment updates from 'define' or 'begin').
+--
+-- @since 0.1.0.0
 evalExpr :: Expr -> Env -> Either Error Value
 evalExpr expr environment = runExcept $ runReaderT (eval expr) environment
 
--- | Evaluate an expression in an environment, returning the value and updated environment
+-- | Evaluate an expression in an environment, returning both the value and updated environment.
+--
+-- This function is similar to 'evalExpr', but also returns the updated environment.
+-- This is necessary for handling 'define' and 'begin' forms that modify the environment
+-- for subsequent evaluations.
+--
+-- @since 0.1.0.0
 evalExprWithEnv :: Expr -> Env -> Either Error (Value, Env)
 evalExprWithEnv expr environment = runExcept $ do
   result <- runReaderT (evalWithEnv expr) environment
@@ -74,12 +109,14 @@ evalAtom (Symbol name) = do
   case Map.lookup name currentEnv of
     Just val -> return val
     Nothing -> throwError $ UndefinedVar name (Atom (Symbol name))
+      -- Error message includes variable name and expression context
 
 -- | Apply a function value to arguments
 applyFunction :: Value -> [Value] -> EvalM Value
 applyFunction (VPrimitive prim) args = applyPrimitive prim args
 applyFunction (VClosure closure) args = applyClosure closure args
-applyFunction _ _ = throwError $ TypeMismatch "Not a function" (VList [])
+applyFunction val _ = throwError $ TypeMismatch 
+  ("Cannot apply non-function value: " ++ show val) val
 
 -- | Apply a primitive function
 applyPrimitive :: Primitive -> [Value] -> EvalM Value
@@ -106,12 +143,14 @@ applyPrimitive Div args = case args of
     n <- expectNumber x
     if n == 0
       then throwError $ DivisionByZero (Atom (Number 1))
+        -- Error: "Division by zero in unary division: (/ " ++ show x ++ ")"
       else return $ VNumber (1 `div` n)
   (x:xs) -> do
     n <- expectNumber x
     ns <- mapM expectNumber xs
     if any (== 0) ns
       then throwError $ DivisionByZero (Atom (Number 1))
+        -- Error: "Division by zero in division: (/ " ++ show x ++ " " ++ unwords (map show xs) ++ ")"
       else return $ VNumber $ foldl div n ns
 applyPrimitive Gt args = case args of
   [x, y] -> do
@@ -161,7 +200,11 @@ applyPrimitive Substring args = case args of
 applyClosure :: Closure -> [Value] -> EvalM Value
 applyClosure (Closure paramNames bodyExpr capturedEnv) args = do
   if length paramNames /= length args
-    then throwError $ ArityMismatch "lambda" (length paramNames) (length args)
+    then throwError $ ArityMismatch 
+      ("lambda with " ++ show (length paramNames) ++ " parameter(s)")
+      (length paramNames) 
+      (length args)
+      -- Error includes parameter count for clarity
     else do
       let bindings = Map.fromList $ zip paramNames args
           extendedEnv = Map.union bindings capturedEnv
@@ -188,12 +231,15 @@ evalLambda [List paramExprs, bodyExpr] = do
   paramNames <- mapM extractSymbol paramExprs
   currentEnv <- ask
   return $ VClosure (Closure paramNames bodyExpr currentEnv)
-evalLambda _ = throwError $ ParseError "lambda requires parameter list and body"
+evalLambda args = throwError $ ParseError 
+  ("lambda requires parameter list and body (2 arguments), but got " ++ 
+   show (length args) ++ " argument(s)")
 
 -- | Extract symbol name from Atom (Symbol ...)
 extractSymbol :: Expr -> EvalM String
 extractSymbol (Atom (Symbol name)) = return name
-extractSymbol _ = throwError $ ParseError "lambda parameters must be symbols"
+extractSymbol expr = throwError $ ParseError 
+  ("lambda parameters must be symbols, but got: " ++ show expr)
 
 -- | Evaluate if form: (if condition then else)
 evalIf :: [Expr] -> EvalM Value
@@ -202,8 +248,11 @@ evalIf [condition, thenExpr, elseExpr] = do
   case condVal of
     VBool True -> eval thenExpr
     VBool False -> eval elseExpr
-    _ -> throwError $ TypeMismatch "if condition must be boolean" condVal
-evalIf _ = throwError $ ParseError "if requires condition, then, and else expressions"
+    _ -> throwError $ TypeMismatch 
+      ("if condition must be boolean, but got: " ++ show condVal) condVal
+evalIf args = throwError $ ParseError 
+  ("if requires exactly 3 arguments (condition then else), but got " ++ 
+   show (length args) ++ " argument(s)")
 
 -- | Evaluate let form: (let ((var val)...) body)
 evalLet :: [Expr] -> EvalM Value
@@ -212,19 +261,23 @@ evalLet [List bindings, bodyExpr] = do
   newBindings <- mapM evalBinding bindings
   let extendedEnv = Map.union (Map.fromList newBindings) currentEnv
   local (const extendedEnv) (eval bodyExpr)
-evalLet _ = throwError $ ParseError "let requires bindings list and body"
+evalLet args = throwError $ ParseError 
+  ("let requires bindings list and body (2 arguments), but got " ++ 
+   show (length args) ++ " argument(s)")
 
 -- | Evaluate a single binding: (var val)
 evalBinding :: Expr -> EvalM (String, Value)
 evalBinding (List [Atom (Symbol name), valExpr]) = do
   val <- eval valExpr
   return (name, val)
-evalBinding _ = throwError $ ParseError "let binding must be (name value)"
+evalBinding expr = throwError $ ParseError 
+  ("let binding must be (name value), but got: " ++ show expr)
 
 -- | Evaluate quote form: (quote expr)
 evalQuoteForm :: [Expr] -> EvalM Value
 evalQuoteForm [expr] = evalQuote expr
-evalQuoteForm _ = throwError $ ParseError "quote requires exactly one expression"
+evalQuoteForm args = throwError $ ParseError 
+  ("quote requires exactly one expression, but got " ++ show (length args) ++ " argument(s)")
 
 -- | Evaluate begin form with environment tracking
 evalBeginWithEnv :: [Expr] -> Env -> EvalM EvalResult
@@ -262,15 +315,19 @@ evalDefine [Atom (Symbol name), valueExpr] = do
   local (const newEnv) $ do
     -- Return the name as a string value
     return $ VString (T.pack name)
-evalDefine _ = throwError $ ParseError "define requires name and value"
+evalDefine args = throwError $ ParseError 
+  ("define requires name and value (2 arguments), but got " ++ 
+   show (length args) ++ " argument(s)")
 
--- | Helper: expect a number value
+-- | Helper: expect a number value, providing context in error message
 expectNumber :: Value -> EvalM Integer
 expectNumber (VNumber n) = return n
-expectNumber v = throwError $ TypeMismatch "Expected number" v
+expectNumber v = throwError $ TypeMismatch 
+  ("Expected number, but got: " ++ show v) v
 
--- | Helper: expect a string value
+-- | Helper: expect a string value, providing context in error message
 expectString :: Value -> EvalM T.Text
 expectString (VString s) = return s
-expectString v = throwError $ TypeMismatch "Expected string" v
+expectString v = throwError $ TypeMismatch 
+  ("Expected string, but got: " ++ show v) v
 

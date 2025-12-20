@@ -7,6 +7,7 @@ import qualified Lisp.EvalSpec
 import qualified REPLSpec
 import qualified Properties
 import qualified ExamplesSpec
+import qualified IntegrationSpec
 
 main :: IO ()
 main = hspec $ do
@@ -17,4 +18,5 @@ main = hspec $ do
     REPLSpec.spec
     Properties.spec
     ExamplesSpec.spec
+    IntegrationSpec.spec
 

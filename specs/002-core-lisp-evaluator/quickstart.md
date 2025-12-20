@@ -212,11 +212,18 @@ Create `examples/factorial.plisp`:
 
 Load and evaluate:
 ```bash
-cat examples/factorial.plisp | cabal run pattern-lisp
+cabal run pattern-lisp -- examples/factorial.plisp
 ```
 
 Expected output:
 ```
+120
+```
+
+Alternatively, you can use the REPL `:load` command:
+```bash
+cabal run pattern-lisp
+> :load examples/factorial.plisp
 120
 ```
 
