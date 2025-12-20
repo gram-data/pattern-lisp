@@ -78,38 +78,38 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T027 [P] [US1] Create test file `test/PatternLisp/PatternSpec.hs` with module header and imports
-- [ ] T028 [P] [US1] Add test "pattern construction creates atomic pattern" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T029 [P] [US1] Add test "pattern-with creates pattern with elements" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T030 [P] [US1] Add test "pattern-value extracts decoration correctly" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T031 [P] [US1] Add test "pattern-elements returns list of VPattern elements" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T032 [P] [US1] Add test "pattern-length returns correct direct element count" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T033 [P] [US1] Add test "pattern-size counts all nodes recursively" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T034 [P] [US1] Add test "pattern-depth returns max depth correctly" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T035 [P] [US1] Add test "pattern-values flattens all values" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T036 [P] [US1] Add test "nested patterns work correctly" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T037 [P] [US1] Add test "type errors for non-pattern values" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T038 [P] [US1] Add test "arity errors for wrong argument counts" in `test/PatternLisp/PatternSpec.hs`
+- [X] T027 [P] [US1] Create test file `test/PatternLisp/PatternSpec.hs` with module header and imports
+- [X] T028 [P] [US1] Add test "pattern construction creates atomic pattern" in `test/PatternLisp/PatternSpec.hs`
+- [X] T029 [P] [US1] Add test "pattern-with creates pattern with elements" in `test/PatternLisp/PatternSpec.hs`
+- [X] T030 [P] [US1] Add test "pattern-value extracts decoration correctly" in `test/PatternLisp/PatternSpec.hs`
+- [X] T031 [P] [US1] Add test "pattern-elements returns list of VPattern elements" in `test/PatternLisp/PatternSpec.hs`
+- [X] T032 [P] [US1] Add test "pattern-length returns correct direct element count" in `test/PatternLisp/PatternSpec.hs`
+- [X] T033 [P] [US1] Add test "pattern-size counts all nodes recursively" in `test/PatternLisp/PatternSpec.hs`
+- [X] T034 [P] [US1] Add test "pattern-depth returns max depth correctly" in `test/PatternLisp/PatternSpec.hs`
+- [X] T035 [P] [US1] Add test "pattern-values flattens all values" in `test/PatternLisp/PatternSpec.hs`
+- [X] T036 [P] [US1] Add test "nested patterns work correctly" in `test/PatternLisp/PatternSpec.hs`
+- [X] T037 [P] [US1] Add test "type errors for non-pattern values" in `test/PatternLisp/PatternSpec.hs`
+- [X] T038 [P] [US1] Add test "arity errors for wrong argument counts" in `test/PatternLisp/PatternSpec.hs`
 
 ### Implementation for User Story 1
 
-- [ ] T039 [US1] Implement `evalPatternValue :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T040 [US1] Implement `evalPatternElements :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T041 [US1] Implement `evalPatternLength :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T042 [US1] Implement `evalPatternSize :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T043 [US1] Implement `evalPatternDepth :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T044 [US1] Implement `evalPatternValues :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T045 [US1] Add helper function `expectPattern :: Value -> EvalM (Pattern Subject)` in `src/PatternLisp/Eval.hs`
-- [ ] T046 [US1] Add `applyPrimitive PatternValue` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T047 [US1] Add `applyPrimitive PatternElements` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T048 [US1] Add `applyPrimitive PatternLength` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T049 [US1] Add `applyPrimitive PatternSize` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T050 [US1] Add `applyPrimitive PatternDepth` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T051 [US1] Add `applyPrimitive PatternValues` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T052 [US1] Add pattern query primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern-value", "pattern-elements", "pattern-length", "pattern-size", "pattern-depth", "pattern-values")
-- [ ] T053 [US1] Add arity checking for all pattern query primitives in `src/PatternLisp/Eval.hs`
-- [ ] T054 [US1] Add type checking error messages for pattern operations in `src/PatternLisp/Eval.hs`
-- [ ] T055 [US1] Verify all tests pass: `cabal test PatternSpec`
+- [X] T039 [US1] Implement `evalPatternValue :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T040 [US1] Implement `evalPatternElements :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T041 [US1] Implement `evalPatternLength :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T042 [US1] Implement `evalPatternSize :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T043 [US1] Implement `evalPatternDepth :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T044 [US1] Implement `evalPatternValues :: Pattern Subject -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
+- [X] T045 [US1] Add helper function `expectPattern :: Value -> EvalM (Pattern Subject)` in `src/PatternLisp/PatternPrimitives.hs` (Note: implemented in PatternPrimitives, not Eval, as it's only needed there)
+- [X] T046 [US1] Add `applyPrimitive PatternValue` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T047 [US1] Add `applyPrimitive PatternElements` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T048 [US1] Add `applyPrimitive PatternLength` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T049 [US1] Add `applyPrimitive PatternSize` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T050 [US1] Add `applyPrimitive PatternDepth` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T051 [US1] Add `applyPrimitive PatternValues` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T052 [US1] Add pattern query primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern-value", "pattern-elements", "pattern-length", "pattern-size", "pattern-depth", "pattern-values")
+- [X] T053 [US1] Add arity checking for all pattern query primitives in `src/PatternLisp/Eval.hs`
+- [X] T054 [US1] Add type checking error messages for pattern operations in `src/PatternLisp/Eval.hs`
+- [X] T055 [US1] Verify all tests pass: `cabal test` (all 83 tests pass, including PatternSpec)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Pattern values can be created, queried, and transformed.
 

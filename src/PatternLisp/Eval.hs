@@ -203,13 +203,32 @@ applyPrimitive PatternWith args = case args of
   [decoration, VList elements] -> evalPatternWith decoration elements
   [_, _] -> throwError $ TypeMismatch "pattern-with expects list of elements as second argument" (VList [])
   _ -> throwError $ ArityMismatch "pattern-with" 2 (length args)
--- Pattern query and predicate primitives will be implemented in later phases
-applyPrimitive PatternValue _ = throwError $ TypeMismatch "pattern-value not yet implemented" (VList [])
-applyPrimitive PatternElements _ = throwError $ TypeMismatch "pattern-elements not yet implemented" (VList [])
-applyPrimitive PatternLength _ = throwError $ TypeMismatch "pattern-length not yet implemented" (VList [])
-applyPrimitive PatternSize _ = throwError $ TypeMismatch "pattern-size not yet implemented" (VList [])
-applyPrimitive PatternDepth _ = throwError $ TypeMismatch "pattern-depth not yet implemented" (VList [])
-applyPrimitive PatternValues _ = throwError $ TypeMismatch "pattern-values not yet implemented" (VList [])
+-- Pattern query primitives
+applyPrimitive PatternValue args = case args of
+  [VPattern pat] -> evalPatternValue pat
+  [v] -> throwError $ TypeMismatch ("pattern-value expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-value" 1 (length args)
+applyPrimitive PatternElements args = case args of
+  [VPattern pat] -> evalPatternElements pat
+  [v] -> throwError $ TypeMismatch ("pattern-elements expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-elements" 1 (length args)
+applyPrimitive PatternLength args = case args of
+  [VPattern pat] -> evalPatternLength pat
+  [v] -> throwError $ TypeMismatch ("pattern-length expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-length" 1 (length args)
+applyPrimitive PatternSize args = case args of
+  [VPattern pat] -> evalPatternSize pat
+  [v] -> throwError $ TypeMismatch ("pattern-size expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-size" 1 (length args)
+applyPrimitive PatternDepth args = case args of
+  [VPattern pat] -> evalPatternDepth pat
+  [v] -> throwError $ TypeMismatch ("pattern-depth expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-depth" 1 (length args)
+applyPrimitive PatternValues args = case args of
+  [VPattern pat] -> evalPatternValues pat
+  [v] -> throwError $ TypeMismatch ("pattern-values expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-values" 1 (length args)
+-- Pattern predicate primitives will be implemented in Phase 6
 applyPrimitive PatternFind _ = throwError $ TypeMismatch "pattern-find not yet implemented" (VList [])
 applyPrimitive PatternAny _ = throwError $ TypeMismatch "pattern-any? not yet implemented" (VList [])
 applyPrimitive PatternAll _ = throwError $ TypeMismatch "pattern-all? not yet implemented" (VList [])

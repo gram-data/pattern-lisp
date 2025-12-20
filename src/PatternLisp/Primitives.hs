@@ -48,5 +48,11 @@ initialEnv = Map.fromList
   , ("substring", VPrimitive Substring)
   , ("pattern", VPrimitive PatternCreate)
   , ("pattern-with", VPrimitive PatternWith)
+  , ("pattern-value", VPrimitive PatternValue)
+  , ("pattern-elements", VPrimitive PatternElements)
+  , ("pattern-length", VPrimitive PatternLength)
+  , ("pattern-size", VPrimitive PatternSize)
+  , ("pattern-depth", VPrimitive PatternDepth)
+  , ("pattern-values", VPrimitive PatternValues)
   ]
 
