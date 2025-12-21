@@ -6,6 +6,7 @@ import qualified PatternLisp.PrimitivesSpec
 import qualified PatternLisp.EvalSpec
 import qualified PatternLisp.PatternSpec
 import qualified PatternLisp.RuntimeSpec
+import qualified PatternLisp.SubjectSpec
 import qualified REPLSpec
 import qualified Properties
 import qualified ExamplesSpec
@@ -19,6 +20,7 @@ main = hspec $ do
     PatternLisp.EvalSpec.spec
     PatternLisp.PatternSpec.spec
     PatternLisp.RuntimeSpec.spec
+    PatternLisp.SubjectSpec.spec
     REPLSpec.spec
     Properties.spec
     ExamplesSpec.spec

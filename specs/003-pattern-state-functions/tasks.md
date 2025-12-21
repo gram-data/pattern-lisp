@@ -159,45 +159,45 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T072 [P] [US3] Create test file `test/PatternLisp/SubjectSpec.hs` with module header and imports
-- [ ] T073 [P] [US3] Add test "round-trip numbers" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T074 [P] [US3] Add test "round-trip strings" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T075 [P] [US3] Add test "round-trip booleans" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T076 [P] [US3] Add test "round-trip lists" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T077 [P] [US3] Add test "round-trip patterns" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T078 [P] [US3] Add test "round-trip simple closure" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T079 [P] [US3] Add test "round-trip closure with captured environment" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T080 [P] [US3] Add test "round-trip nested closures" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T081 [P] [US3] Add test "round-trip primitives" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T082 [P] [US3] Add test "closure remains executable after round-trip" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T083 [P] [US3] Add test "primitive remains functional after round-trip" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T084 [P] [US3] Add test "pattern containing closures round-trips" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T085 [P] [US3] Add test "exprToSubject and subjectToExpr round-trip" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T086 [P] [US3] Add test "variable names use property-based representation" in `test/PatternLisp/SubjectSpec.hs`
-- [ ] T087 [P] [US3] Add test "missing primitive in registry errors correctly" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T072 [P] [US3] Create test file `test/PatternLisp/SubjectSpec.hs` with module header and imports
+- [x] T073 [P] [US3] Add test "round-trip numbers" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T074 [P] [US3] Add test "round-trip strings" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T075 [P] [US3] Add test "round-trip booleans" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T076 [P] [US3] Add test "round-trip lists" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T077 [P] [US3] Add test "round-trip patterns" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T078 [P] [US3] Add test "round-trip simple closure" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T079 [P] [US3] Add test "round-trip closure with captured environment" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T080 [P] [US3] Add test "round-trip nested closures" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T081 [P] [US3] Add test "round-trip primitives" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T082 [P] [US3] Add test "closure remains executable after round-trip" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T083 [P] [US3] Add test "primitive remains functional after round-trip" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T084 [P] [US3] Add test "pattern containing closures round-trips" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T085 [P] [US3] Add test "exprToSubject and subjectToExpr round-trip" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T086 [P] [US3] Add test "variable names use property-based representation" in `test/PatternLisp/SubjectSpec.hs`
+- [x] T087 [P] [US3] Add test "missing primitive in registry errors correctly" in `test/PatternLisp/SubjectSpec.hs`
 - [ ] T088 [P] [US3] Create property-based test file `test/Properties.hs` for serialization round-trips
 - [ ] T089 [P] [US3] Add QuickCheck property "all values serialize and deserialize correctly" in `test/Properties.hs`
 
 ### Implementation for User Story 3
 
-- [ ] T090 [US3] Create `src/PatternLisp/Subject.hs` module with module header and exports
-- [ ] T091 [US3] Implement `valueToSubject :: Value -> Subject` for VNumber in `src/PatternLisp/Subject.hs`
-- [ ] T092 [US3] Implement `valueToSubject :: Value -> Subject` for VString in `src/PatternLisp/Subject.hs`
-- [ ] T093 [US3] Implement `valueToSubject :: Value -> Subject` for VBool in `src/PatternLisp/Subject.hs`
-- [ ] T094 [US3] Implement `valueToSubject :: Value -> Subject` for VList in `src/PatternLisp/Subject.hs`
-- [ ] T095 [US3] Implement `valueToSubject :: Value -> Subject` for VPattern in `src/PatternLisp/Subject.hs`
-- [ ] T096 [US3] Implement `valueToSubject :: Value -> Subject` for VClosure in `src/PatternLisp/Subject.hs` (with params, env, body)
-- [ ] T097 [US3] Implement `valueToSubject :: Value -> Subject` for VPrimitive in `src/PatternLisp/Subject.hs` (by name)
-- [ ] T098 [US3] Implement `subjectToValue :: Subject -> Either Error Value` for all value types in `src/PatternLisp/Subject.hs`
-- [ ] T099 [US3] Implement environment serialization in closure serialization (envSubject with bindings) in `src/PatternLisp/Subject.hs`
-- [ ] T100 [US3] Implement `exprToSubject :: Expr -> Subject` for all Expr forms in `src/PatternLisp/Subject.hs`
-- [ ] T101 [US3] Implement `subjectToExpr :: Subject -> Either Error Expr` for all Expr forms in `src/PatternLisp/Subject.hs`
-- [ ] T102 [US3] Add primitive registry lookup in `subjectToValue` for VPrimitive deserialization in `src/PatternLisp/Subject.hs`
-- [ ] T103 [US3] Add error handling for missing primitives in `src/PatternLisp/Subject.hs`
-- [ ] T104 [US3] Add error handling for invalid Subject structures in `src/PatternLisp/Subject.hs`
-- [ ] T105 [US3] Document serialization format in `src/PatternLisp/Subject.hs` module header
-- [ ] T106 [US3] Document variable name property-based representation in `src/PatternLisp/Subject.hs`
-- [ ] T107 [US3] Verify all serialization tests pass: `cabal test SubjectSpec Properties`
+- [x] T090 [US3] Create `src/PatternLisp/Subject.hs` module with module header and exports
+- [x] T091 [US3] Implement `valueToSubject :: Value -> Subject` for VNumber in `src/PatternLisp/Subject.hs`
+- [x] T092 [US3] Implement `valueToSubject :: Value -> Subject` for VString in `src/PatternLisp/Subject.hs`
+- [x] T093 [US3] Implement `valueToSubject :: Value -> Subject` for VBool in `src/PatternLisp/Subject.hs`
+- [x] T094 [US3] Implement `valueToSubject :: Value -> Subject` for VList in `src/PatternLisp/Subject.hs`
+- [x] T095 [US3] Implement `valueToSubject :: Value -> Subject` for VPattern in `src/PatternLisp/Subject.hs`
+- [x] T096 [US3] Implement `valueToSubject :: Value -> Subject` for VClosure in `src/PatternLisp/Subject.hs` (with params, env, body)
+- [x] T097 [US3] Implement `valueToSubject :: Value -> Subject` for VPrimitive in `src/PatternLisp/Subject.hs` (by name)
+- [x] T098 [US3] Implement `subjectToValue :: Subject -> Either Error Value` for all value types in `src/PatternLisp/Subject.hs`
+- [x] T099 [US3] Implement environment serialization in closure serialization (envSubject with bindings) in `src/PatternLisp/Subject.hs`
+- [x] T100 [US3] Implement `exprToSubject :: Expr -> Subject` for all Expr forms in `src/PatternLisp/Subject.hs`
+- [x] T101 [US3] Implement `subjectToExpr :: Subject -> Either Error Expr` for all Expr forms in `src/PatternLisp/Subject.hs`
+- [x] T102 [US3] Add primitive registry lookup in `subjectToValue` for VPrimitive deserialization in `src/PatternLisp/Subject.hs`
+- [x] T103 [US3] Add error handling for missing primitives in `src/PatternLisp/Subject.hs`
+- [x] T104 [US3] Add error handling for invalid Subject structures in `src/PatternLisp/Subject.hs`
+- [x] T105 [US3] Document serialization format in `src/PatternLisp/Subject.hs` module header
+- [x] T106 [US3] Document variable name property-based representation in `src/PatternLisp/Subject.hs`
+- [x] T107 [US3] Verify all serialization tests pass: `cabal test SubjectSpec Properties`
 
 **Checkpoint**: At this point, User Stories 1, 2, AND 3 should all work independently. Complete serialization enables code-as-data capabilities.
 
