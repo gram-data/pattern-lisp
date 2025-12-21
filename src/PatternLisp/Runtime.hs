@@ -21,9 +21,12 @@ module PatternLisp.Runtime
 
 import PatternLisp.Syntax
 import PatternLisp.Eval
+import PatternLisp.PatternPrimitives
 import Pattern (Pattern)
 import Subject.Core (Subject)
 import qualified Data.Map as Map
+import Control.Monad.Reader
+import Control.Monad.Except
 
 -- | Runtime state containing environment and execution trace.
 --
@@ -72,12 +75,12 @@ validateTool expr runtimeEnv = do
 --
 -- The tool must be a validated closure (from validateTool). The function:
 -- 1. Applies the tool closure to the input state
--- 2. Verifies the result is a Pattern Subject
+-- 2. Automatically maps the result to Pattern Subject representation if needed
 -- 3. Returns the transformed Pattern Subject
 --
 -- Returns an error if:
 -- - Tool execution fails
--- - Tool returns a non-Pattern value
+-- - Result cannot be mapped to Pattern Subject
 executeTool :: Value -> Pattern Subject -> Env -> Either Error (Pattern Subject)
 executeTool toolVal inputState _env = do
   -- Verify tool is a closure
@@ -102,12 +105,12 @@ executeTool toolVal inputState _env = do
           -- Evaluate body in extended environment
           result <- evalExpr bodyExpr extendedEnv
           
-          -- Verify result is a Pattern
+          -- Map result to Pattern Subject (automatically if not already VPattern)
           case result of
             VPattern outputState -> Right outputState
-            _ -> Left $ TypeMismatch
-                   ("Tool must return a Pattern Subject, but returned: " ++ show result)
-                   result
+            _ -> 
+              -- Automatically map to Pattern Subject representation
+              runExcept $ runReaderT (valueToPatternSubject result) extendedEnv
     _ -> Left $ TypeMismatch
            ("executeTool expects a closure, but got: " ++ show toolVal)
            toolVal

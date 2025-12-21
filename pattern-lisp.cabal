@@ -11,6 +11,8 @@ library
                      , PatternLisp.PatternPrimitives
                      , PatternLisp.Runtime
                      , PatternLisp.Subject
+                     , PatternLisp.Gram
+                     , PatternLisp.FileLoader
   hs-source-dirs:      src
   build-depends:       base >=4.18 && <5
                      , text
@@ -20,6 +22,7 @@ library
                      , gram
                      , pattern
                      , subject
+                     , filepath
   default-language:    Haskell2010
   ghc-options:         -Wall -Werror
 
@@ -29,6 +32,10 @@ executable pattern-lisp
   build-depends:       base >=4.18 && <5
                      , pattern-lisp
                      , text
+                     , containers
+                     , pattern
+                     , subject
+                     , gram
   default-language:    Haskell2010
 
 test-suite pattern-lisp-test
@@ -43,5 +50,6 @@ test-suite pattern-lisp-test
                      , containers
                      , pattern
                      , subject
+                     , mtl
   default-language:    Haskell2010
 

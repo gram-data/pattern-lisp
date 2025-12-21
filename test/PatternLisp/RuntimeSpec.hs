@@ -94,7 +94,7 @@ spec = describe "PatternLisp.Runtime - Pure Function State Transformation" $ do
                     let subjLabels = labels subj
                     "String" `Set.member` subjLabels `shouldBe` True
     
-    it "tool execution: tool returns non-pattern should error" $ do
+    it "tool execution: tool returns non-pattern should auto-map to pattern" $ do
       case parseExpr "(lambda (state) 42)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case validateTool expr initialEnv of
@@ -102,9 +102,13 @@ spec = describe "PatternLisp.Runtime - Pure Function State Transformation" $ do
           Right toolVal -> do
             let inputState = createTestPattern "hello"
             case executeTool toolVal inputState initialEnv of
-              Left (TypeMismatch _ _) -> True `shouldBe` True
-              Left err -> fail $ "Unexpected error: " ++ show err
-              Right _ -> fail "Expected TypeMismatch error for non-pattern return"
+              Left err -> fail $ "Execution error: " ++ show err
+              Right outputState -> do
+                -- Verify output is a pattern with Number decoration
+                case PatternCore.value outputState of
+                  subj -> do
+                    let subjLabels = labels subj
+                    "Number" `Set.member` subjLabels `shouldBe` True
     
     it "tool composition: sequential tool execution" $ do
       -- First tool: identity

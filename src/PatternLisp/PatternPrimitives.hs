@@ -20,6 +20,7 @@ module PatternLisp.PatternPrimitives
   , evalPatternSize
   , evalPatternDepth
   , evalPatternValues
+  , valueToPatternSubject
   ) where
 
 import PatternLisp.Syntax
@@ -28,6 +29,9 @@ import Pattern (Pattern)
 import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
+import qualified Subject.Core as SubjectCore
+import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 import Control.Monad.Reader
 import Control.Monad.Except
 
@@ -119,4 +123,37 @@ evalPatternValues pat = do
       case subjectToValue (PatternCore.value p) of
         Right val -> val : concatMap patternValues (PatternCore.elements p)
         Left _ -> concatMap patternValues (PatternCore.elements p)  -- Skip on error
+
+-- | Maps any Value to its Pattern Subject representation.
+-- This enables all s-expressions to be represented as Pattern Subject.
+-- 
+-- * VPattern: Returns the pattern directly
+-- * VList: Converts to pattern-with with elements (empty list becomes atomic pattern)
+-- * Other values: Converts to Subject and wraps in atomic pattern
+valueToPatternSubject :: Value -> EvalM (Pattern Subject)
+valueToPatternSubject (VPattern pat) = return pat
+valueToPatternSubject (VList []) = do
+  -- Empty list becomes atomic pattern with empty Subject decoration
+  let emptySubject = SubjectCore.Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["List"]
+        , properties = Map.empty
+        }
+  return $ pattern emptySubject
+valueToPatternSubject (VList (v:vs)) = do
+  -- Non-empty list: convert to pattern-with
+  -- Decoration is empty Subject, elements are recursively converted
+  let emptySubject = SubjectCore.Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["List"]
+        , properties = Map.empty
+        }
+  -- Convert each element to Pattern Subject recursively
+  elementPatterns <- mapM valueToPatternSubject (v:vs)
+  return $ patternWith emptySubject elementPatterns
+valueToPatternSubject val = do
+  -- For atoms and other values: convert to Subject, then wrap in atomic pattern
+  let subject = valueToSubject val
+      pat = pattern subject
+  return pat
 
