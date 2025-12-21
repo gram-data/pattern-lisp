@@ -28,6 +28,9 @@ module PatternLisp.Eval
 
 import PatternLisp.Syntax
 import PatternLisp.PatternPrimitives
+import Pattern (Pattern)
+import qualified Pattern.Core as PatternCore
+import Subject.Core (Subject)
 import qualified Data.Map as Map
 import Control.Monad.Reader
 import Control.Monad.Except
@@ -228,10 +231,30 @@ applyPrimitive PatternValues args = case args of
   [VPattern pat] -> evalPatternValues pat
   [v] -> throwError $ TypeMismatch ("pattern-values expects pattern, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "pattern-values" 1 (length args)
--- Pattern predicate primitives will be implemented in Phase 6
-applyPrimitive PatternFind _ = throwError $ TypeMismatch "pattern-find not yet implemented" (VList [])
-applyPrimitive PatternAny _ = throwError $ TypeMismatch "pattern-any? not yet implemented" (VList [])
-applyPrimitive PatternAll _ = throwError $ TypeMismatch "pattern-all? not yet implemented" (VList [])
+-- Pattern predicate primitives
+applyPrimitive PatternFind args = case args of
+  [VPattern pat, VClosure _] -> evalPatternFind pat (args !! 1)
+  [VPattern _, predVal] -> throwError $ TypeMismatch ("pattern-find expects closure as predicate, but got: " ++ show predVal) predVal
+  [v, _] -> throwError $ TypeMismatch ("pattern-find expects pattern as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-find" 2 (length args)
+applyPrimitive PatternAny args = case args of
+  [VPattern pat, VClosure _] -> evalPatternAny pat (args !! 1)
+  [VPattern _, predVal] -> throwError $ TypeMismatch ("pattern-any? expects closure as predicate, but got: " ++ show predVal) predVal
+  [v, _] -> throwError $ TypeMismatch ("pattern-any? expects pattern as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-any?" 2 (length args)
+applyPrimitive PatternAll args = case args of
+  [VPattern pat, VClosure _] -> evalPatternAll pat (args !! 1)
+  [VPattern _, predVal] -> throwError $ TypeMismatch ("pattern-all? expects closure as predicate, but got: " ++ show predVal) predVal
+  [v, _] -> throwError $ TypeMismatch ("pattern-all? expects pattern as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-all?" 2 (length args)
+-- Pattern conversion primitives
+applyPrimitive ValueToPattern args = case args of
+  [val] -> evalValueToPattern val
+  _ -> throwError $ ArityMismatch "value-to-pattern" 1 (length args)
+applyPrimitive PatternToValue args = case args of
+  [VPattern pat] -> evalPatternToValue pat
+  [v] -> throwError $ TypeMismatch ("pattern-to-value expects pattern, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "pattern-to-value" 1 (length args)
 
 -- | Apply a closure (extend captured environment with arguments)
 applyClosure :: Closure -> [Value] -> EvalM Value
@@ -246,6 +269,126 @@ applyClosure (Closure paramNames bodyExpr capturedEnv) args = do
       let bindings = Map.fromList $ zip paramNames args
           extendedEnv = Map.union bindings capturedEnv
       local (const extendedEnv) (eval bodyExpr)
+
+-- | Pattern predicate primitives (implemented in Eval to avoid circular dependency)
+-- These functions evaluate predicate closures on patterns
+
+-- | Finds the first subpattern that matches a predicate closure
+evalPatternFind :: Pattern Subject -> Value -> EvalM Value
+evalPatternFind pat predVal = do
+  case predVal of
+    VClosure closure -> do
+      matches <- applyPredicate closure pat
+      if matches
+        then return $ VPattern pat
+        else findInElements (PatternCore.elements pat) closure
+    _ -> throwError $ TypeMismatch 
+           "pattern-find expects closure as predicate" predVal
+  where
+    applyPredicate :: Closure -> Pattern Subject -> EvalM Bool
+    applyPredicate closure p = do
+      let patternVal = VPattern p
+          (Closure paramNames bodyExpr capturedEnv) = closure
+      case paramNames of
+        [paramName] -> do
+          let bindings = Map.fromList [(paramName, patternVal)]
+              extendedEnv = Map.union bindings capturedEnv
+          result <- local (const extendedEnv) (eval bodyExpr)
+          case result of
+            VBool b -> return b
+            _ -> throwError $ TypeMismatch 
+                   "predicate must return boolean" result
+        _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
+    
+    findInElements :: [Pattern Subject] -> Closure -> EvalM Value
+    findInElements [] _ = return $ VList []
+    findInElements (p:ps) closure = do
+      matches <- applyPredicate closure p
+      if matches
+        then return $ VPattern p
+        else do
+          nestedResult <- findInElements (PatternCore.elements p) closure
+          case nestedResult of
+            VPattern _ -> return nestedResult
+            _ -> findInElements ps closure
+
+-- | Checks if any subpattern matches a predicate closure
+evalPatternAny :: Pattern Subject -> Value -> EvalM Value
+evalPatternAny pat predVal = do
+  case predVal of
+    VClosure closure -> do
+      matches <- applyPredicate closure pat
+      if matches
+        then return $ VBool True
+        else anyInElements (PatternCore.elements pat) closure
+    _ -> throwError $ TypeMismatch 
+           "pattern-any? expects closure as predicate" predVal
+  where
+    applyPredicate :: Closure -> Pattern Subject -> EvalM Bool
+    applyPredicate closure p = do
+      let patternVal = VPattern p
+          (Closure paramNames bodyExpr capturedEnv) = closure
+      case paramNames of
+        [paramName] -> do
+          let bindings = Map.fromList [(paramName, patternVal)]
+              extendedEnv = Map.union bindings capturedEnv
+          result <- local (const extendedEnv) (eval bodyExpr)
+          case result of
+            VBool b -> return b
+            _ -> throwError $ TypeMismatch 
+                   "predicate must return boolean" result
+        _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
+    
+    anyInElements :: [Pattern Subject] -> Closure -> EvalM Value
+    anyInElements [] _ = return $ VBool False
+    anyInElements (p:ps) closure = do
+      matches <- applyPredicate closure p
+      if matches
+        then return $ VBool True
+        else do
+          nestedResult <- anyInElements (PatternCore.elements p) closure
+          case nestedResult of
+            VBool True -> return $ VBool True
+            _ -> anyInElements ps closure
+
+-- | Checks if all subpatterns match a predicate closure
+evalPatternAll :: Pattern Subject -> Value -> EvalM Value
+evalPatternAll pat predVal = do
+  case predVal of
+    VClosure closure -> do
+      matches <- applyPredicate closure pat
+      if not matches
+        then return $ VBool False
+        else allInElements (PatternCore.elements pat) closure
+    _ -> throwError $ TypeMismatch 
+           "pattern-all? expects closure as predicate" predVal
+  where
+    applyPredicate :: Closure -> Pattern Subject -> EvalM Bool
+    applyPredicate closure p = do
+      let patternVal = VPattern p
+          (Closure paramNames bodyExpr capturedEnv) = closure
+      case paramNames of
+        [paramName] -> do
+          let bindings = Map.fromList [(paramName, patternVal)]
+              extendedEnv = Map.union bindings capturedEnv
+          result <- local (const extendedEnv) (eval bodyExpr)
+          case result of
+            VBool b -> return b
+            _ -> throwError $ TypeMismatch 
+                   "predicate must return boolean" result
+        _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
+    
+    allInElements :: [Pattern Subject] -> Closure -> EvalM Value
+    allInElements [] _ = return $ VBool True
+    allInElements (p:ps) closure = do
+      matches <- applyPredicate closure p
+      if not matches
+        then return $ VBool False
+        else do
+          nestedResult <- allInElements (PatternCore.elements p) closure
+          case nestedResult of
+            VBool False -> return $ VBool False
+            _ -> allInElements ps closure
 
 -- | Evaluate a quoted expression (convert Expr to Value)
 evalQuote :: Expr -> EvalM Value

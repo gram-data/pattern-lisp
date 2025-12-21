@@ -17,9 +17,15 @@
 module PatternLisp.Gram
   ( patternToGram
   , gramToPattern
+  , exprToGram
+  , gramToExpr
   ) where
 
+import PatternLisp.Syntax
+import PatternLisp.Subject
 import Pattern (Pattern)
+import Pattern.Core (pattern)
+import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import Gram.Serialize (toGram)
 import Gram.Parse (fromGram, ParseError)
@@ -37,4 +43,46 @@ patternToGram = toGram
 -- Returns an error if the gram notation is invalid.
 gramToPattern :: String -> Either ParseError (Pattern Subject)
 gramToPattern = fromGram
+
+-- | Serialize an expression AST to gram notation string.
+--
+-- This function converts a Pattern Lisp expression to its gram notation
+-- representation by first converting it to a Subject, wrapping it in an atomic
+-- Pattern, and then serializing to gram.
+--
+-- Example usage:
+--
+-- > import PatternLisp.Gram
+-- > import PatternLisp.Parser
+-- >
+-- > case parseExpr "(+ 1 2)" of
+-- >   Right expr -> exprToGram expr  -- Returns gram string
+-- >   Left err -> error (show err)
+exprToGram :: Expr -> String
+exprToGram expr =
+  let subject = exprToSubject expr
+      pat = pattern subject
+  in patternToGram pat
+
+-- | Deserialize gram notation string to an expression AST.
+--
+-- This function parses gram notation text, extracts the Pattern Subject,
+-- and converts it back to an expression AST. Returns an error if the gram
+-- notation is invalid or cannot be converted to an expression.
+--
+-- Example usage:
+--
+-- > import PatternLisp.Gram
+-- >
+-- > case gramToExpr "[Number {value: 42}]" of
+-- >   Right expr -> print expr  -- Atom (Number 42)
+-- >   Left err -> error (show err)
+gramToExpr :: String -> Either Error Expr
+gramToExpr gramText = do
+  pat <- case gramToPattern gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right p -> Right p
+  -- Extract the Subject from the Pattern (assuming atomic pattern for expressions)
+  let subject = PatternCore.value pat
+  subjectToExpr subject
 

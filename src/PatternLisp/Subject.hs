@@ -11,11 +11,13 @@
 -- * Booleans: Label "Bool", property `{value: Bool}`
 -- * Lists: Label "List", property `elements` (VArray of Subjects)
 -- * Patterns: Label "Pattern", properties `decoration` (Subject) and `elements` (VArray of Subjects)
--- * Closures: Label "Closure", properties:
---   - `params`: VArray of strings (parameter names)
---   - `env`: Subject (Label "Env", property `bindings` with VArray of Binding Subjects)
---   - `body`: Subject (Expression AST via `exprToSubject`)
---   - Each binding: Label "Binding", properties `{name: String, value: Subject}`
+-- * Closures: Serialized as Pattern Subject:
+--   - Decoration: Subject with label "Closure", property `params` (VArray of strings)
+--   - Elements: [Pattern Subject] where the Pattern's decoration is the body Expr (as Subject via `exprToSubject`)
+--   - Note: Environment is not serialized to avoid deeply nested structures
+--   - Legacy format (backward compatible): Subject with label "Closure", properties:
+--     - `params`: VArray of strings (parameter names)
+--     - `body`: Subject (Expression AST via `exprToSubject`)
 -- * Primitives: Label "Primitive", property `name` (string)
 --
 -- Variable Names:
@@ -37,9 +39,13 @@ module PatternLisp.Subject
   , subjectToValue
   , exprToSubject
   , subjectToExpr
+  , envToSubject
+  , subjectToEnv
+  , subjectToBinding
   ) where
 
 import PatternLisp.Syntax
+import PatternLisp.Primitives (initialEnv)
 import Pattern (Pattern)
 import Pattern.Core (patternWith)
 import qualified Pattern.Core as PatternCore
@@ -127,13 +133,16 @@ valueToSubject (VPattern pat) = patternToSubject pat
           , ("elements", SubjectValue.VArray (map (subjectToSubjectValue . patternToSubject) (PatternCore.elements p)))
           ]
       }
-valueToSubject (VClosure (Closure paramNames bodyExpr capturedEnv)) = Subject
+valueToSubject (VClosure (Closure paramNames bodyExpr _capturedEnv)) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Closure"]
   , properties = Map.fromList 
       [ ("params", SubjectValue.VArray (map SubjectValue.VString paramNames))
-      , ("env", subjectToSubjectValue (envToSubject capturedEnv))
       , ("body", subjectToSubjectValue (exprToSubject bodyExpr))
+      -- Note: We don't serialize the full environment because it creates
+      -- deeply nested VMap structures that gram notation can't handle.
+      -- The environment can be reconstructed from the body expression if needed.
+      -- For gram serialization, we only serialize params and body.
       ]
   }
 valueToSubject (VPrimitive prim) = Subject
@@ -143,6 +152,9 @@ valueToSubject (VPrimitive prim) = Subject
   }
 
 -- | Converts an environment to Subject representation.
+-- Note: Not currently used for Closure serialization to avoid deeply nested VMap structures.
+{-# WARNING envToSubject "Not currently used for Closure serialization" #-}
+{-# NOINLINE envToSubject #-}
 envToSubject :: Env -> Subject
 envToSubject runtimeEnv = Subject
   { identity = SubjectCore.Symbol ""
@@ -191,10 +203,29 @@ subjectToValue subj
         Just (SubjectValue.VArray vs) -> Right vs
         _ -> Left $ TypeMismatch "Pattern Subject missing elements property" (VList [])
       elementSubjects <- mapM subjectValueToSubject elementsVal
-      elementPatterns <- mapM subjectToPatternFromSubject elementSubjects
-      -- Create pattern with decoration and elements
-      let pat = patternWith decorationVal elementPatterns
-      Right $ VPattern pat
+      -- Check if this Pattern represents a Closure (decoration has "Closure" label)
+      if "Closure" `Set.member` labels decorationVal then do
+        -- This is a Closure serialized as Pattern Subject
+        -- Extract params from decoration properties
+        paramsList <- case Map.lookup "params" (properties decorationVal) of
+          Just (SubjectValue.VArray paramStrs) -> do
+            paramNames <- mapM extractString paramStrs
+            Right paramNames
+          _ -> Left $ TypeMismatch "Closure Pattern decoration missing params property" (VList [])
+        -- Extract body from first element (should be Pattern Subject representing body Expr)
+        case elementSubjects of
+          [bodyPatternSubject] -> do
+            -- The body element is a Pattern Subject (stored as Subject with "Pattern" label)
+            -- Convert it back to Pattern Subject, then to Expr
+            bodyPattern <- subjectToPatternFromSubject bodyPatternSubject
+            bodyExpr <- patternSubjectToExpr bodyPattern
+            Right $ VClosure (Closure paramsList bodyExpr initialEnv)
+          _ -> Left $ TypeMismatch "Closure Pattern must have exactly one element (body)" (VList [])
+      else do
+        -- Regular Pattern: create pattern with decoration and elements
+        elementPatterns <- mapM subjectToPatternFromSubject elementSubjects
+        let pat = patternWith decorationVal elementPatterns
+        Right $ VPattern pat
   | "Closure" `Set.member` labels subj = do
       -- Extract params from properties
       paramsList <- case Map.lookup "params" (properties subj) of
@@ -202,16 +233,15 @@ subjectToValue subj
           paramNames <- mapM extractString paramStrs
           Right paramNames
         _ -> Left $ TypeMismatch "Closure Subject missing params property" (VList [])
-      -- Extract env and body from properties
-      envVal <- case Map.lookup "env" (properties subj) of
-        Just v -> subjectValueToSubject v
-        Nothing -> Left $ TypeMismatch "Closure Subject missing env property" (VList [])
+      -- Extract body from properties
       bodyVal <- case Map.lookup "body" (properties subj) of
         Just v -> subjectValueToSubject v
         Nothing -> Left $ TypeMismatch "Closure Subject missing body property" (VList [])
-      env' <- subjectToEnv envVal
       bodyExpr <- subjectToExpr bodyVal
-      Right $ VClosure (Closure paramsList bodyExpr env')
+      -- Note: Environment is not serialized to avoid deeply nested VMap structures.
+      -- Use initialEnv as default (closures will need to be recreated with proper env if needed).
+      -- For gram serialization, we only serialize params and body.
+      Right $ VClosure (Closure paramsList bodyExpr initialEnv)
   | "Primitive" `Set.member` labels subj =
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) ->
@@ -227,6 +257,8 @@ extractString (SubjectValue.VString s) = Right s
 extractString _ = Left $ TypeMismatch "Expected string in params list" (VList [])
 
 -- | Converts a Subject representation back to an environment.
+-- Note: Not currently used for Closure deserialization since env is not serialized.
+{-# WARNING subjectToEnv "Not currently used for Closure deserialization" #-}
 subjectToEnv :: Subject -> Either Error Env
 subjectToEnv subj
   | "Env" `Set.member` labels subj = do
@@ -239,6 +271,8 @@ subjectToEnv subj
   | otherwise = Left $ TypeMismatch "Expected Env Subject" (VList [])
 
 -- | Converts a Subject representation back to a binding.
+-- Note: Not currently used for Closure deserialization since env is not serialized.
+{-# WARNING subjectToBinding "Not currently used for Closure deserialization" #-}
 subjectToBinding :: Subject -> Either Error (String, Value)
 subjectToBinding subj
   | "Binding" `Set.member` labels subj = do
@@ -301,6 +335,19 @@ exprToSubject (Quote expr) = Subject
   , labels = Set.fromList ["Quote"]
   , properties = Map.fromList [("expr", subjectToSubjectValue (exprToSubject expr))]
   }
+
+-- | Converts a Pattern Subject back to expression AST.
+-- This handles the case where List Exprs are represented as Pattern Subjects with elements.
+patternSubjectToExpr :: Pattern Subject -> Either Error Expr
+patternSubjectToExpr pat
+  | "List" `Set.member` labels (PatternCore.value pat) = do
+      -- List pattern: extract elements and convert recursively
+      elementPatterns <- return $ PatternCore.elements pat
+      exprs <- mapM patternSubjectToExpr elementPatterns
+      Right $ List exprs
+  | otherwise = do
+      -- Atomic pattern: convert decoration Subject to Expr
+      subjectToExpr (PatternCore.value pat)
 
 -- | Converts a Subject representation back to expression AST.
 subjectToExpr :: Subject -> Either Error Expr

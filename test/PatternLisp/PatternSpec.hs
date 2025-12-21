@@ -110,4 +110,58 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
           Left (ArityMismatch _ _ _) -> True `shouldBe` True
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected ArityMismatch error"
+  
+  describe "Pattern predicates" $ do
+    it "pattern-find finds matching subpattern" $ do
+      -- Test pattern-find on atomic pattern that matches (using numbers since = only works for numbers)
+      case parseExpr "(pattern-find (pattern 42) (lambda (p) (= (pattern-value p) 42)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> case val of
+            VPattern _ -> True `shouldBe` True
+            _ -> fail $ "Expected VPattern, got: " ++ show val
+    
+    it "pattern-find returns nothing if no match" $ do
+      -- Test pattern-find on atomic pattern that doesn't match
+      case parseExpr "(pattern-find (pattern 1) (lambda (p) (= (pattern-value p) 3)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> case val of
+            VList [] -> True `shouldBe` True  -- Returns empty list if no match
+            _ -> fail $ "Expected empty list, got: " ++ show val
+    
+    it "pattern-any? checks existence correctly" $ do
+      -- Test pattern-any? on atomic pattern that matches
+      case parseExpr "(pattern-any? (pattern 42) (lambda (p) (= (pattern-value p) 42)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "pattern-all? checks universal property correctly" $ do
+      -- Test pattern-all? on atomic pattern
+      case parseExpr "(pattern-all? (pattern 10) (lambda (p) (= (pattern-value p) 10)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "pattern predicates work with closures" $ do
+      -- Test that predicates can be closures with captured environment
+      -- Use nested let to define variables in sequence
+      case parseExpr "(let ((target-val 42)) (let ((pred (lambda (p) (= (pattern-value p) target-val)))) (let ((p1 (pattern target-val))) (pattern-any? p1 pred))))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "pattern-find type error for non-closure predicate" $ do
+      case parseExpr "(pattern-find (pattern 1) \"not-a-closure\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left (TypeMismatch _ _) -> True `shouldBe` True
+          Left err -> fail $ "Unexpected error: " ++ show err
+          Right _ -> fail "Expected TypeMismatch error"
 

@@ -213,25 +213,25 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T108 [P] [US4] Add test "pattern-find finds matching subpattern" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T109 [P] [US4] Add test "pattern-find returns nothing if no match" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T110 [P] [US4] Add test "pattern-any? checks existence correctly" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T111 [P] [US4] Add test "pattern-all? checks universal property correctly" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T112 [P] [US4] Add test "pattern predicates work with closures" in `test/PatternLisp/PatternSpec.hs`
-- [ ] T113 [P] [US4] Add test "pattern-find type error for non-closure predicate" in `test/PatternLisp/PatternSpec.hs`
+- [X] T108 [P] [US4] Add test "pattern-find finds matching subpattern" in `test/PatternLisp/PatternSpec.hs`
+- [X] T109 [P] [US4] Add test "pattern-find returns nothing if no match" in `test/PatternLisp/PatternSpec.hs`
+- [X] T110 [P] [US4] Add test "pattern-any? checks existence correctly" in `test/PatternLisp/PatternSpec.hs`
+- [X] T111 [P] [US4] Add test "pattern-all? checks universal property correctly" in `test/PatternLisp/PatternSpec.hs`
+- [X] T112 [P] [US4] Add test "pattern predicates work with closures" in `test/PatternLisp/PatternSpec.hs`
+- [X] T113 [P] [US4] Add test "pattern-find type error for non-closure predicate" in `test/PatternLisp/PatternSpec.hs`
 
 ### Implementation for User Story 4
 
-- [ ] T114 [US4] Implement `evalPatternFind :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T115 [US4] Implement `evalPatternAny :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T116 [US4] Implement `evalPatternAll :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/PatternPrimitives.hs`
-- [ ] T117 [US4] Add `applyPrimitive PatternFind` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T118 [US4] Add `applyPrimitive PatternAny` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T119 [US4] Add `applyPrimitive PatternAll` case in `src/PatternLisp/Eval.hs` with type checking
-- [ ] T120 [US4] Add pattern predicate primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern-find", "pattern-any?", "pattern-all?")
-- [ ] T121 [US4] Add arity checking for pattern predicate primitives in `src/PatternLisp/Eval.hs`
-- [ ] T122 [US4] Add error handling for non-closure predicates in `src/PatternLisp/Eval.hs`
-- [ ] T123 [US4] Verify all pattern predicate tests pass: `cabal test PatternSpec`
+- [X] T114 [US4] Implement `evalPatternFind :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/Eval.hs` (moved to Eval to avoid circular dependency)
+- [X] T115 [US4] Implement `evalPatternAny :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/Eval.hs` (moved to Eval to avoid circular dependency)
+- [X] T116 [US4] Implement `evalPatternAll :: Pattern Subject -> Value -> EvalM Value` in `src/PatternLisp/Eval.hs` (moved to Eval to avoid circular dependency)
+- [X] T117 [US4] Add `applyPrimitive PatternFind` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T118 [US4] Add `applyPrimitive PatternAny` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T119 [US4] Add `applyPrimitive PatternAll` case in `src/PatternLisp/Eval.hs` with type checking
+- [X] T120 [US4] Add pattern predicate primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` ("pattern-find", "pattern-any?", "pattern-all?")
+- [X] T121 [US4] Add arity checking for pattern predicate primitives in `src/PatternLisp/Eval.hs`
+- [X] T122 [US4] Add error handling for non-closure predicates in `src/PatternLisp/Eval.hs`
+- [X] T123 [US4] Verify all pattern predicate tests pass: `cabal test PatternSpec`
 
 **Checkpoint**: At this point, User Stories 1, 2, 3, AND 4 should all work independently. Full pattern primitive support enables complex state transformations.
 

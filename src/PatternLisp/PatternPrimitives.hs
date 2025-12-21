@@ -21,6 +21,8 @@ module PatternLisp.PatternPrimitives
   , evalPatternDepth
   , evalPatternValues
   , valueToPatternSubject
+  , evalValueToPattern
+  , evalPatternToValue
   ) where
 
 import PatternLisp.Syntax
@@ -30,14 +32,37 @@ import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
+import qualified Subject.Value as SubjectValue
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import Control.Monad.Reader
 import Control.Monad.Except
 
+
 -- | Re-export EvalM type for pattern primitives
 -- This avoids circular dependency with PatternLisp.Eval
 type EvalM = ReaderT Env (Except Error)
+
+-- | Converts an Expr directly to Pattern Subject.
+-- This is used for serializing closure bodies, where List Exprs should be
+-- represented as Pattern Subjects with elements, not as Subjects with properties.
+exprToPatternSubject :: Expr -> EvalM (Pattern Subject)
+exprToPatternSubject (List exprs) = do
+  -- List Expr: represent as Pattern Subject with elements
+  -- Decoration is empty Subject with "List" label
+  let decoration = SubjectCore.Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["List"]
+        , properties = Map.empty
+        }
+  -- Convert each element Expr to Pattern Subject recursively
+  elementPatterns <- mapM exprToPatternSubject exprs
+  return $ patternWith decoration elementPatterns
+exprToPatternSubject expr = do
+  -- For atoms and other Exprs: convert to Subject, then wrap in atomic pattern
+  let subject = exprToSubject expr
+      pat = pattern subject
+  return pat
 
 -- | Creates an atomic Pattern from a Value.
 --
@@ -151,9 +176,51 @@ valueToPatternSubject (VList (v:vs)) = do
   -- Convert each element to Pattern Subject recursively
   elementPatterns <- mapM valueToPatternSubject (v:vs)
   return $ patternWith emptySubject elementPatterns
+valueToPatternSubject (VClosure (Closure paramNames bodyExpr _capturedEnv)) = do
+  -- Serialize Closure as Pattern Subject:
+  -- - Decoration: Subject with labels ["Closure"] and properties {params: [...]}
+  -- - Elements: [Pattern Subject from body Expr]
+  let decoration = SubjectCore.Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["Closure"]
+        , properties = Map.fromList 
+            [ ("params", SubjectValue.VArray (map SubjectValue.VString paramNames))
+            ]
+        }
+  -- Convert body Expr to Pattern Subject (Expr is an s-expression, so it can be Pattern Subject)
+  bodyPattern <- exprToPatternSubject bodyExpr
+  return $ patternWith decoration [bodyPattern]
 valueToPatternSubject val = do
   -- For atoms and other values: convert to Subject, then wrap in atomic pattern
   let subject = valueToSubject val
       pat = pattern subject
   return pat
+
+-- | Converts any Value to a Pattern.
+-- This is the primitive version of valueToPatternSubject that returns VPattern.
+evalValueToPattern :: Value -> EvalM Value
+evalValueToPattern val = do
+  pat <- valueToPatternSubject val
+  return $ VPattern pat
+
+-- | Converts a Pattern back to a Value.
+-- For Closure patterns (decoration has "Closure" label), converts the full Pattern to Closure Value.
+-- For other patterns, extracts the decoration Subject and converts it to a Value.
+evalPatternToValue :: Pattern Subject -> EvalM Value
+evalPatternToValue pat = do
+  let decoration = PatternCore.value pat
+  -- Check if this is a Closure pattern
+  if "Closure" `Set.member` labels decoration then do
+    -- Convert Pattern Subject to Subject, then to Value
+    -- This will handle Closure patterns correctly
+    let patternSubject = valueToSubject (VPattern pat)
+    case subjectToValue patternSubject of
+      Left err -> throwError err
+      Right val -> return val
+  else do
+    -- Regular pattern: extract decoration
+    case subjectToValue decoration of
+      Left err -> throwError err
+      Right val -> return val
+
 

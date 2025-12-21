@@ -5,7 +5,6 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Syntax
 import PatternLisp.FileLoader
-import PatternLisp.Runtime
 import PatternLisp.Gram
 import System.IO
 import System.Environment
@@ -71,8 +70,24 @@ isGram :: FilePath -> Bool
 isGram = isSuffixOf ".gram"
 
 -- | Separate files from flags in command-line arguments
+-- Excludes the expression argument that comes after -e or --eval
 parseArgs :: [String] -> ([FilePath], [String])
-parseArgs args = partition (\arg -> not (arg `elem` ["-i", "--interactive", "-e", "--eval"])) args
+parseArgs args = 
+  let excludeEvalExpr [] = ([], [])
+      excludeEvalExpr [x] 
+        | x `elem` ["-i", "--interactive", "-e", "--eval", "-h", "--help"] = ([], [x])
+        | otherwise = ([x], [])
+      excludeEvalExpr (x:y:xs)
+        | x `elem` ["-e", "--eval"] = 
+            let (files', flags') = excludeEvalExpr xs
+            in (files', x : flags')  -- Include -e in flags, skip y (the expression)
+        | x `elem` ["-i", "--interactive", "-h", "--help"] = 
+            let (files', flags') = excludeEvalExpr (y:xs)
+            in (files', x : flags')
+        | otherwise = 
+            let (files', flags') = excludeEvalExpr (y:xs)
+            in (x : files', flags')
+  in excludeEvalExpr args
 
 -- | Extract eval expression from arguments (after -e or --eval)
 extractEvalExpr :: [String] -> Maybe String
@@ -89,6 +104,10 @@ hasInteractiveFlag args = "-i" `elem` args || "--interactive" `elem` args
 -- | Check if -e or --eval flag is present
 hasEvalFlag :: [String] -> Bool
 hasEvalFlag args = "-e" `elem` args || "--eval" `elem` args
+
+-- | Check if -h or --help flag is present
+hasHelpFlag :: [String] -> Bool
+hasHelpFlag args = "-h" `elem` args || "--help" `elem` args
 
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
@@ -135,84 +154,11 @@ repl env = do
         then repl newEnv
         else return ()
 
--- | Execute a tool on a state and output result as gram
-executeToolOnState :: FilePath -> FilePath -> IO ()
-executeToolOnState toolFile stateFile = do
-  -- Load files
-  envResult <- processFiles [stateFile, toolFile] initialEnv
-  case envResult of
-    Left err -> do
-      hPutStrLn stderr (formatError err)
-      exitFailure
-    Right env -> do
-      -- Get tool and state from environment
-      let toolName = deriveNameFromFilename toolFile
-          stateName = deriveNameFromFilename stateFile
-      
-      -- Get tool value
-      case Map.lookup toolName env of
-        Nothing -> do
-          hPutStrLn stderr $ "Error: Tool not found: " ++ toolName
-          exitFailure
-        Just toolVal -> do
-          -- Get state value
-          case Map.lookup stateName env of
-            Nothing -> do
-              hPutStrLn stderr $ "Error: State not found: " ++ stateName
-              exitFailure
-            Just (VPattern inputState) -> do
-              -- Execute tool
-              case executeTool toolVal inputState env of
-                Left execErr -> do
-                  hPutStrLn stderr (formatError execErr)
-                  exitFailure
-                Right outputState -> do
-                  -- Output as gram
-                  putStr (patternToGram outputState)
-            Just _ -> do
-              hPutStrLn stderr $ "Error: State is not a Pattern: " ++ stateName
-              exitFailure
-
--- | Execute a tool reading gram from stdin
-executeToolOnStdin :: FilePath -> IO ()
-executeToolOnStdin toolFile = do
-  -- Read gram from stdin
-  gramInput <- getContents
-  case gramToPattern gramInput of
-    Left parseErr -> do
-      hPutStrLn stderr $ "Error parsing gram from stdin: " ++ show parseErr
-      exitFailure
-    Right inputState -> do
-      -- Load tool
-      envResult <- processFiles [toolFile] initialEnv
-      case envResult of
-        Left err -> do
-          hPutStrLn stderr (formatError err)
-          exitFailure
-        Right env -> do
-          -- Get tool from environment
-          let toolName = deriveNameFromFilename toolFile
-          case Map.lookup toolName env of
-            Nothing -> do
-              hPutStrLn stderr $ "Error: Tool not found: " ++ toolName
-              exitFailure
-            Just toolVal -> do
-              -- Execute tool
-              case executeTool toolVal inputState env of
-                Left execErr -> do
-                  hPutStrLn stderr (formatError execErr)
-                  exitFailure
-                Right outputState -> do
-                  -- Output as gram
-                  putStr (patternToGram outputState)
-
 -- | Execute expression in loaded environment
 executeWithEval :: [String] -> String -> IO ()
 executeWithEval allArgs exprStr = do
   -- Separate files from flags
   let (files, flags) = parseArgs allArgs
-      plispFiles = filter isPlisp files
-      gramFiles = filter isGram files
   
   -- Load files
   envResult <- processFiles files initialEnv
@@ -237,6 +183,35 @@ executeWithEval allArgs exprStr = do
                 VPattern pat -> putStr (patternToGram pat)
                 _ -> putStrLn (formatValue val)
 
+-- | Load files and output the last plisp file's result
+executeFiles :: [FilePath] -> IO ()
+executeFiles files = do
+  envResult <- processFiles files initialEnv
+  case envResult of
+    Left err -> do
+      hPutStrLn stderr (formatError err)
+      exitFailure
+    Right env -> do
+      -- Get plisp files in order
+      let plispFiles = filter isPlisp files
+      case plispFiles of
+        [] -> do
+          -- No plisp files, just exit successfully (gram files were loaded)
+          return ()
+        _ -> do
+          -- Get the last plisp file's result
+          let lastPlispFile = last plispFiles
+              name = deriveNameFromFilename lastPlispFile
+          case Map.lookup name env of
+            Nothing -> do
+              hPutStrLn stderr $ "Error: Could not find result for file: " ++ name
+              exitFailure
+            Just val -> do
+              -- If result is a Pattern, output as gram; otherwise format as value
+              case val of
+                VPattern pat -> putStr (patternToGram pat)
+                _ -> putStrLn (formatValue val)
+
 -- | Print usage message
 usage :: IO ()
 usage = do
@@ -244,20 +219,25 @@ usage = do
   hPutStrLn stderr ""
   hPutStrLn stderr "Modes:"
   hPutStrLn stderr "  No arguments: Start interactive REPL"
-  hPutStrLn stderr "  1 .plisp + 1 .gram: Auto-execute tool on state (output as gram)"
-  hPutStrLn stderr "  1 .plisp (no .gram): Read gram from stdin, execute tool, output as gram"
-  hPutStrLn stderr "  Multiple files: Must specify -i (interactive) or -e <expr> (evaluate)"
+  hPutStrLn stderr "  Files only: Load files, evaluate last .plisp file, output result to stdout"
+  hPutStrLn stderr "  Files + -e: Load files, evaluate expression, output result"
+  hPutStrLn stderr "  Files + -i: Load files, then start interactive REPL"
   hPutStrLn stderr ""
   hPutStrLn stderr "Options:"
+  hPutStrLn stderr "  -h, --help         Show this help message"
   hPutStrLn stderr "  -i, --interactive  Force interactive mode (load files, then REPL)"
-  hPutStrLn stderr "  -e, --eval EXPR    Evaluate expression and exit"
+  hPutStrLn stderr "  -e, --eval EXPR    Evaluate expression after loading files, then exit"
+  hPutStrLn stderr ""
+  hPutStrLn stderr "File types:"
+  hPutStrLn stderr "  .plisp files: Evaluated as Pattern Lisp expressions"
+  hPutStrLn stderr "  .gram files: Loaded as Pattern Subject values"
   hPutStrLn stderr ""
   hPutStrLn stderr "Examples:"
   hPutStrLn stderr "  pattern-lisp                                    # Interactive REPL"
-  hPutStrLn stderr "  pattern-lisp tool.plisp state.gram              # Execute tool on state"
-  hPutStrLn stderr "  pattern-lisp tool.plisp < input.gram > output.gram  # Pipe gram through tool"
-  hPutStrLn stderr "  pattern-lisp tool1.plisp tool2.plisp state.gram -i  # Interactive with files"
-  hPutStrLn stderr "  pattern-lisp tool1.plisp state.gram -e \"(tool1 state)\"  # Explicit execution"
+  hPutStrLn stderr "  pattern-lisp script.plisp                       # Load script, eval, output result"
+  hPutStrLn stderr "  pattern-lisp script.plisp state.gram            # Load both, eval script, output result"
+  hPutStrLn stderr "  pattern-lisp script.plisp -i                   # Load script, then REPL"
+  hPutStrLn stderr "  pattern-lisp script.plisp -e \"(+ 1 2)\"          # Load script, eval expr, output result"
 
 -- | Main entry point
 main :: IO ()
@@ -266,66 +246,42 @@ main = do
   hSetBuffering stderr LineBuffering
   args <- getArgs
   
-  -- Separate files from flags
-  let (files, flags) = parseArgs args
-      plispFiles = filter isPlisp files
-      gramFiles = filter isGram files
-      hasInteractive = hasInteractiveFlag args
-      hasEval = hasEvalFlag args
-  
-  case (files, hasInteractive, hasEval) of
-    -- No files: Interactive REPL
-    ([], False, False) -> repl initialEnv
-    
-    -- Single tool + single state: Auto-execute (unless -i)
-    ([toolFile, stateFile], False, False) | isPlisp toolFile && isGram stateFile ->
-      if hasInteractive
-        then do
-          envResult <- processFiles [stateFile, toolFile] initialEnv
-          case envResult of
-            Left err -> hPutStrLn stderr (formatError err) >> exitFailure
-            Right env -> repl env
-        else executeToolOnState toolFile stateFile
-    
-    -- Single tool, no state: Read from stdin (unless -i)
-    ([toolFile], False, False) | isPlisp toolFile ->
-      if hasInteractive
-        then do
-          envResult <- processFiles [toolFile] initialEnv
-          case envResult of
-            Left err -> hPutStrLn stderr (formatError err) >> exitFailure
-            Right env -> repl env
-        else executeToolOnStdin toolFile
-    
-    -- Multiple files: Must specify -i OR -e
-    (_, False, False) | length files > 1 -> do
-      hPutStrLn stderr "Error: Multiple files require -i (interactive) or -e <expr> (evaluate)"
-      usage
-      exitFailure
-    
-    -- Both -i and -e specified: Error
-    (_, True, True) -> do
-      hPutStrLn stderr "Error: Cannot specify both -i and -e flags"
-      usage
-      exitFailure
-    
-    -- -i flag: Interactive mode
-    (_, True, False) -> do
-      envResult <- processFiles files initialEnv
-      case envResult of
-        Left err -> hPutStrLn stderr (formatError err) >> exitFailure
-        Right env -> repl env
-    
-    -- -e flag: Evaluate expression
-    (_, False, True) -> do
-      case extractEvalExpr args of
-        Nothing -> do
-          hPutStrLn stderr "Error: -e/--eval requires an expression argument"
+  -- Check for help flag first
+  if hasHelpFlag args
+    then usage >> exitSuccess
+    else do
+      -- Separate files from flags
+      let (files, flags) = parseArgs args
+          plispFiles = filter isPlisp files
+          gramFiles = filter isGram files
+          hasInteractive = hasInteractiveFlag args
+          hasEval = hasEvalFlag args
+      
+      case (files, hasInteractive, hasEval) of
+        -- No files: Interactive REPL
+        ([], False, False) -> repl initialEnv
+        
+        -- Both -i and -e specified: Error
+        (_, True, True) -> do
+          hPutStrLn stderr "Error: Cannot specify both -i and -e flags"
           usage
           exitFailure
-        Just exprStr -> executeWithEval args exprStr
-    
-    -- Default: Show usage
-    _ -> do
-      usage
-      exitFailure
+        
+        -- -i flag: Interactive mode (load files, then REPL)
+        (_, True, False) -> do
+          envResult <- processFiles files initialEnv
+          case envResult of
+            Left err -> hPutStrLn stderr (formatError err) >> exitFailure
+            Right env -> repl env
+        
+        -- -e flag: Evaluate expression (after loading files)
+        (_, _, True) -> do
+          case extractEvalExpr args of
+            Nothing -> do
+              hPutStrLn stderr "Error: -e/--eval requires an expression argument"
+              usage
+              exitFailure
+            Just exprStr -> executeWithEval args exprStr
+        
+        -- Files with no flags: Default behavior - load files, eval and exit
+        (_, False, False) -> executeFiles files

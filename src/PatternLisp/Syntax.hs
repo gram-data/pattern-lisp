@@ -85,6 +85,9 @@ data Primitive
   | PatternFind        -- ^ (pattern-find p pred)
   | PatternAny        -- ^ (pattern-any? p pred)
   | PatternAll         -- ^ (pattern-all? p pred)
+  -- Pattern conversion
+  | ValueToPattern     -- ^ (value-to-pattern v): convert any value to pattern
+  | PatternToValue     -- ^ (pattern-to-value p): convert pattern to value
   deriving (Eq, Show)
 
 -- | Environment mapping variable names to values
@@ -123,6 +126,8 @@ primitiveName PatternValues = "pattern-values"
 primitiveName PatternFind = "pattern-find"
 primitiveName PatternAny = "pattern-any?"
 primitiveName PatternAll = "pattern-all?"
+primitiveName ValueToPattern = "value-to-pattern"
+primitiveName PatternToValue = "pattern-to-value"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -148,5 +153,7 @@ primitiveFromName "pattern-values" = Just PatternValues
 primitiveFromName "pattern-find" = Just PatternFind
 primitiveFromName "pattern-any?" = Just PatternAny
 primitiveFromName "pattern-all?" = Just PatternAll
+primitiveFromName "value-to-pattern" = Just ValueToPattern
+primitiveFromName "pattern-to-value" = Just PatternToValue
 primitiveFromName _ = Nothing
 

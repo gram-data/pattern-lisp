@@ -1,16 +1,16 @@
--- | File loading for Pattern Lisp with implicit lambda wrapping and gram support.
+-- | File loading for Pattern Lisp with gram support.
 --
--- This module provides functions to load `.plisp` and `.gram` files according to
--- the convention-based approach:
--- * `.plisp` files are automatically wrapped in `(lambda (state) ...)` if needed
+-- This module provides functions to load `.plisp` and `.gram` files:
+-- * `.plisp` files are parsed and evaluated as arbitrary Pattern Lisp expressions
 -- * `.gram` files are loaded as Pattern Subject state variables
 -- * Files are processed in order: `.gram` files first, then `.plisp` files
+-- * Results are bound to filename-derived names in the environment
 --
 -- Example usage:
 --
 -- > import PatternLisp.FileLoader
 -- >
--- > env <- processFiles ["state.gram", "tool.plisp"] initialEnv
+-- > env <- processFiles ["state.gram", "script.plisp"] initialEnv
 -- > case env of
 -- >   Left err -> print err
 -- >   Right env' -> use env'
@@ -19,6 +19,7 @@ module PatternLisp.FileLoader
   , loadGramFile
   , processFiles
   , deriveNameFromFilename
+  , FileLoadResult(..)
   ) where
 
 import PatternLisp.Syntax
@@ -30,15 +31,17 @@ import qualified Data.Map as Map
 import Data.List (isSuffixOf, isPrefixOf, partition, elemIndex)
 import Control.Monad (foldM)
 
+-- | Result of loading a plisp file
+data FileLoadResult = FileLoadResult
+  { loadResultEnv :: Env      -- Updated environment with all define bindings
+  , loadResultName :: String   -- Filename-derived name
+  , loadResultValue :: Value   -- Final evaluated value
+  }
+
 -- | Derives a variable/function name from a filename.
 -- Removes the extension and sanitizes the name.
 deriveNameFromFilename :: FilePath -> String
 deriveNameFromFilename = takeBaseName
-
--- | Checks if an expression is already a lambda with "state" parameter.
-isStateLambda :: Expr -> Bool
-isStateLambda (List [Atom (Symbol "lambda"), List [Atom (Symbol "state")], _]) = True
-isStateLambda _ = False
 
 -- | Strips inline comments (starting with ;) from a line
 stripInlineComment :: String -> String
@@ -73,40 +76,25 @@ parseFileContent content = do
       let trimmed = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse $ line
       in null trimmed || ";;" `isPrefixOf` trimmed
 
--- | Wraps a sequence of expressions in a lambda with "state" parameter.
--- The last expression becomes the return value.
-wrapInStateLambda :: Expr -> Expr
-wrapInStateLambda expr = 
-  List [Atom (Symbol "lambda"), List [Atom (Symbol "state")], expr]
-
--- | Loads a `.plisp` file and wraps it in `(lambda (state) ...)` if needed.
+-- | Loads a `.plisp` file and evaluates it.
 --
--- If the file already contains a lambda with "state" parameter, it's used as-is.
--- Otherwise, the file content is wrapped in `(lambda (state) ...)`.
--- Multiple expressions in the file are wrapped in a `begin` form first.
--- The function evaluates to a closure and is bound to the filename-derived name.
-loadPlispFile :: FilePath -> Env -> IO (Either Error (String, Value))
+-- The file content is parsed and evaluated. Multiple expressions are
+-- wrapped in a `begin` form. All bindings from `define` statements are
+-- preserved in the returned environment. The final result value is also
+-- bound to the filename-derived name.
+loadPlispFile :: FilePath -> Env -> IO (Either Error FileLoadResult)
 loadPlispFile filepath runtimeEnv = do
   content <- readFile filepath
   case parseFileContent content of
     Left parseErr -> return $ Left parseErr
     Right expr -> do
-      -- Check if already a lambda with "state" parameter
-      let wrappedExpr = if isStateLambda expr
-                        then expr
-                        else wrapInStateLambda expr
-      
-      case evalExpr wrappedExpr runtimeEnv of
+      case evalExprWithEnv expr runtimeEnv of
         Left evalErr -> return $ Left evalErr
-        Right val -> do
-          -- Validate it's a tool (lambda with "state" parameter)
-          case val of
-            VClosure (Closure [paramName] _ _) | paramName == "state" -> do
-              let name = deriveNameFromFilename filepath
-              return $ Right (name, val)
-            _ -> return $ Left $ TypeMismatch
-                   ("File does not evaluate to a tool (lambda (state) ...): " ++ filepath)
-                   val
+        Right (val, updatedEnv) -> do
+          let name = deriveNameFromFilename filepath
+              -- Merge the updated environment (with all defines) and add the final result
+              finalEnv = Map.insert name val updatedEnv
+          return $ Right $ FileLoadResult finalEnv name val
 
 -- | Loads a `.gram` file and parses it to Pattern Subject.
 --
@@ -154,5 +142,5 @@ processFiles files initialEnv = do
       result <- loadPlispFile filepath currentEnv
       case result of
         Left fileErr -> return $ Left fileErr
-        Right (name, val) -> return $ Right $ Map.insert name val currentEnv
+        Right fileResult -> return $ Right $ loadResultEnv fileResult
 

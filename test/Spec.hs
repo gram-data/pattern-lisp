@@ -8,6 +8,7 @@ import qualified PatternLisp.PatternSpec
 import qualified PatternLisp.RuntimeSpec
 import qualified PatternLisp.SubjectSpec
 import qualified PatternLisp.GramSpec
+import qualified PatternLisp.GramSerializationSpec
 import qualified REPLSpec
 import qualified Properties
 import qualified ExamplesSpec
@@ -23,6 +24,7 @@ main = hspec $ do
     PatternLisp.RuntimeSpec.spec
     PatternLisp.SubjectSpec.spec
     PatternLisp.GramSpec.spec
+    PatternLisp.GramSerializationSpec.spec
     REPLSpec.spec
     Properties.spec
     ExamplesSpec.spec
