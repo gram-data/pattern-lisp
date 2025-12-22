@@ -467,7 +467,14 @@ Two bindings are considered equal if:
 - They have the same name
 - They have structurally equal values
 
-Example:
+**Binding Identity Semantics**:
+- Deduplication uses **value equality**, not binding identity
+- Two bindings with the same name and structurally equal values are deduplicated, even if they originated from different scopes
+- This is safe because closures capture name→value mappings, not binding identities
+- For simple values (numbers, strings, booleans, records), this is always correct
+- For closure values, equality is by structural equality (same code + same captured environment)
+
+**Example: Same binding from same scope**:
 ```scheme
 (let ((x 10))
   (list
@@ -475,9 +482,109 @@ Example:
     (lambda (b) (* b x))))
 ```
 
-Both closures capture `x` with value `10`. These are the **same binding**, so:
+Both closures capture `x` with value `10` from the same scope. These are the **same binding**, so:
 - One binding pattern is created: `x_1:[:Binding {name: "x"} | [:Number {value: 10}]]`
 - Both closures reference `x_1` in their `[:Env | ...]` sections
+
+**Example: Different scopes, same name and value**:
+```scheme
+(let ((x 10))
+  (let ((x 10))  ; Different binding, same name and value
+    (list
+      (lambda () x)  ; Captures inner x
+      (lambda () x))))  ; Also captures inner x
+```
+
+Even though the outer `x` and inner `x` are different bindings in the source code, both closures capture the inner `x` with value `10`. Since they have the same name and value, they deduplicate to one binding pattern. This is correct because the closures' behavior is identical - they both resolve to `10`.
+
+### Closure Equality for Deduplication
+
+**Closure Equality Semantics**:
+- Closures are compared by **structural equality**: same code (body) + same captured environment
+- Two closures with identical code but different binding names are **not** deduplicated
+- Deduplication is by (name, value) pairs, so different names = different bindings
+
+**Example: Equivalent closures, different names**:
+```scheme
+(let ((f (lambda (x) (+ x 1)))
+      (g (lambda (x) (+ x 1))))
+  (list f g))
+```
+
+- `f` and `g` closures are **equivalent** (isomorphic - same code, same behavior)
+- But they are **not equal** for deduplication because bindings are (name, value) pairs
+- Binding 1: `name="f"`, `value=closure(...)`
+- Binding 2: `name="g"`, `value=closure(...)`
+- Since names differ, these bindings are **NOT deduplicated**, even though closure values are equivalent
+
+**Example: Same closure, same name**:
+```scheme
+(let ((helper (lambda (x) (+ x 1))))
+  (list
+    (lambda (a) (helper a))
+    (lambda (b) (helper b))))
+```
+
+Both closures capture `helper` with the same closure value. These are the **same binding**, so:
+- One binding pattern is created for `helper`
+- Both closures reference the same binding identifier
+
+### Closure Materialization Rules
+
+**When Closures Are Serialized**:
+- Closures in captured environments are **immediately materialized** as values
+- No deferral - the environment contains actual values, not deferred expressions
+- This matches Common Lisp semantics: closures capture their lexical environment at creation time
+
+**Example: Nested Closures**:
+```scheme
+(let ((helper (lambda (x) (+ x 1))))
+  (lambda (y) (helper y)))
+```
+
+**Evaluation order**:
+1. `(lambda (x) (+ x 1))` evaluates to a closure value
+2. That closure value is bound to `helper` in the environment
+3. `(lambda (y) (helper y))` captures `currentEnv`, which already contains `helper` as a closure value
+4. The outer closure's environment has `helper` as a concrete, materialized closure
+
+**Serialized**:
+```gram
+{ kind: "Pattern Lisp" }
+
+[:Environment |
+  helper_binding:[:Binding {name: "helper"} |
+    [:Closure |
+      [:Env |],
+      [:Lambda |
+        [:Parameters | x],
+        [:Body |
+          [:List |
+            [:Symbol {name: "+"}],
+            x,
+            [:Number {value: 1}]
+          ]
+        ]
+      ]
+    ]
+  ]
+]
+
+[:Closure |
+  [:Env | helper_binding],
+  [:Lambda |
+    [:Parameters | y],
+    [:Body |
+      [:List |
+        [:Symbol {name: "helper"}],
+        y
+      ]
+    ]
+  ]
+]
+```
+
+**Key point**: The captured closure (`helper`) is serialized immediately as a binding in the Environment section. It's not deferred until the outer closure is called.
 
 ## Primitives
 
@@ -530,6 +637,27 @@ Serialized Environment:
 ```
 
 Deserialized environment: `standard library ∪ {config: ...}` = full environment restored
+
+### Standard Library Versioning
+
+**Note**: Standard library versioning is a **runtime implementation concern**, not a serialization problem. The serialization design is sufficient as-is.
+
+**Runtime Responsibilities**:
+- Runtime should be generative and adaptive, synthesizing library functions as needed
+- Runtime should infer primitive behavior from names and usage patterns when primitives are missing
+- Runtime should maintain meta-information about available primitives
+- Runtime should handle compatibility and version differences
+
+**Serialization Format Flexibility**:
+- The serialization format could support metadata fields (like `description` and `version`) in bindings as an extension
+- This would be an optional enhancement, not a requirement
+- Current format: `[:Binding {name: "..."} | value]`
+- Future format (optional): `[:Binding {name: "...", description: "...", version: "..."} | value]`
+
+**Current Behavior**:
+- Primitives serialize as `[:Primitive {name: "..."}]` (symbolic reference)
+- Runtime looks up primitives by name during deserialization
+- If primitive doesn't exist, deserialization fails (runtime should handle this gracefully)
 
 ## Canonical Tool Form
 
@@ -600,6 +728,127 @@ Serialized:
 ```
 
 **Key property**: All tools that share configuration/bindings reference the same bindings in the Environment section. This dramatically reduces serialization size for multi-tool agents.
+
+## Recursive and Mutually Recursive Closures
+
+Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in the binding graph are handled naturally through forward references.
+
+### Mutual Recursion
+
+**Example: Mutually recursive closures**:
+```scheme
+(let ((f (lambda (x) (if (= x 0) 1 (g (- x 1)))))
+      (g (lambda (x) (if (= x 0) 1 (f (- x 1))))))
+  f)
+```
+
+**Serialized**:
+```gram
+{ kind: "Pattern Lisp" }
+
+[:Environment |
+  f_binding:[:Binding {name: "f"} |
+    [:Closure |
+      [:Env | g_binding],
+      [:Lambda |
+        [:Parameters | x],
+        [:Body |
+          [:If |
+            [:List | [:Symbol {name: "="}], x, [:Number {value: 0}]],
+            [:Number {value: 1}],
+            [:List |
+              [:Symbol {name: "g"}],
+              [:List | [:Symbol {name: "-"}], x, [:Number {value: 1}]]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  g_binding:[:Binding {name: "g"} |
+    [:Closure |
+      [:Env | f_binding],
+      [:Lambda |
+        [:Parameters | x],
+        [:Body |
+          [:If |
+            [:List | [:Symbol {name: "="}], x, [:Number {value: 0}]],
+            [:Number {value: 1}],
+            [:List |
+              [:Symbol {name: "f"}],
+              [:List | [:Symbol {name: "-"}], x, [:Number {value: 1}]]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+]
+
+f_binding
+```
+
+**Key observations**:
+- Both `f` and `g` are closures, so they're bindings in the Environment section
+- `f_binding` references `g_binding` in its `[:Env | ...]` section (forward reference)
+- `g_binding` references `f_binding` in its `[:Env | ...]` section (forward reference)
+- This creates a cycle: `f_binding` → `g_binding` → `f_binding`
+- Forward references are valid in Gram, so this works
+- In the body, `f` and `g` are referenced as symbols which are resolved via the environment at runtime
+
+### Self-Recursion
+
+**Example: Self-recursive closure**:
+```scheme
+(let ((fact (lambda (n) 
+               (if (= n 0) 
+                 1 
+                 (* n (fact (- n 1)))))))
+  fact)
+```
+
+**Serialized**:
+```gram
+{ kind: "Pattern Lisp" }
+
+[:Environment |
+  fact_binding:[:Binding {name: "fact"} |
+    [:Closure |
+      [:Env | fact_binding],  ; Self-reference!
+      [:Lambda |
+        [:Parameters | n],
+        [:Body |
+          [:If |
+            [:List | [:Symbol {name: "="}], n, [:Number {value: 0}]],
+            [:Number {value: 1}],
+            [:List |
+              [:Symbol {name: "*"}],
+              n,
+              [:List |
+                [:Symbol {name: "fact"}],
+                [:List | [:Symbol {name: "-"}], n, [:Number {value: 1}]]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+]
+
+fact_binding
+```
+
+**Key observation**: The closure references itself in its `[:Env | fact_binding]` section. This is a self-referential cycle, which is also fully supported.
+
+### How Cycles Are Handled
+
+Cycles in the binding graph are handled naturally because:
+1. **Forward references are valid** in Gram notation
+2. **Bindings are identified by identifiers**, not by position
+3. **Environment lookup resolves cycles** during deserialization
+4. **Symbol resolution** in bodies happens at runtime via the environment
+5. **Binding deduplication works correctly** - each closure is a unique binding (different names), even if they reference each other
 
 ## Pattern References and Ordering
 
@@ -700,22 +949,56 @@ For each closure:
 
 ### Step 5: Convert Pattern Subjects to S-expressions
 
-Recursively convert Pattern Subjects to runtime s-expression values:
+Recursively convert Pattern Subjects to runtime s-expression values using label-based pattern matching:
+
+**Deserialization Pattern Matching**:
+
+The label on each pattern explicitly indicates its interpretation. The deserializer uses a decision tree based on labels:
+
+**Runtime Values** (when deserializing top-level expressions or binding values):
+- `[:Closure | ...]` → closure value with reconstructed environment
 - `[:Number {value: n}]` → number value
 - `[:String {value: s}]` → string value
-- `[:List | elems]` → list of values (or function call if in code context)
-- `[:Closure | ...]` → closure value with reconstructed environment
-- `[:If | ...]` → if special form expression
-- `[:Let | ...]` → let special form expression
-- `[:Begin | ...]` → begin special form expression
-- `[:Define | ...]` → define special form expression
-- `[:Quote | ...]` → quote special form expression
+- `[:Bool {value: b}]` → boolean value
+- `[:List | elems]` → list value (data)
+- `[:Primitive {name: "..."}]` → primitive function value
 
-**Key**: Labels explicitly indicate the interpretation:
-- Special form labels (`:If`, `:Let`, etc.) → special form expressions
-- `:List` in code context → function call expression
-- `:List` in value context → list value
-- `:Closure` → closure value
+**Code/Expressions** (when deserializing closure bodies):
+- `[:If | cond, then, else]` → if special form expression
+- `[:Let | bindings, body]` → let special form expression
+- `[:Begin | exprs...]` → begin special form expression
+- `[:Define | name, value]` → define special form expression
+- `[:Quote | expr]` → quote special form expression
+- `[:List | func, args...]` → function call expression (or lambda in code)
+- `[:Symbol {name: "..."}]` → symbol expression
+- `[:Number {value: n}]` → number literal expression
+- `[:String {value: s}]` → string literal expression
+- `[:Bool {value: b}]` → boolean literal expression
+
+**Key Principles**:
+1. **Labels are unambiguous**: Each label has a single interpretation
+2. **Context determines value vs code**: Top-level expressions and binding values are runtime values; closure bodies are code
+3. **Special forms always use explicit labels**: `:If`, `:Let`, `:Begin`, `:Define`, `:Quote` are never ambiguous
+4. **Function calls use `:List`**: In code context, `:List` with a symbol as first element is a function call
+5. **Closures are always marked**: When a closure is a value, it's always `:Closure`, never `:List`
+
+**Decision Tree Example**:
+```
+Pattern Subject → Check Label:
+  ├─ :Closure → Closure value (reconstruct with env + lambda)
+  ├─ :If → If special form (code)
+  ├─ :Let → Let special form (code)
+  ├─ :Begin → Begin special form (code)
+  ├─ :Define → Define special form (code)
+  ├─ :Quote → Quote special form (code)
+  ├─ :List → Check context:
+  │   ├─ Value context → List value
+  │   └─ Code context → Function call (or lambda in code)
+  ├─ :Number → Number (value or literal, depending on context)
+  ├─ :String → String (value or literal, depending on context)
+  ├─ :Bool → Boolean (value or literal, depending on context)
+  └─ :Symbol → Symbol expression (code)
+```
 
 **Output**: Runtime values ready for evaluation
 

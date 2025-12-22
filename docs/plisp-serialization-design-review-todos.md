@@ -523,42 +523,56 @@ For simple values:
 
 **Note**: These follow the same dependency order as Critical Design Decisions.
 
-### 9. Clarify Binding Identity Semantics ⏳
+### 9. Clarify Binding Identity Semantics ✅
 **Dependencies**: #1
 - Document whether deduplication preserves binding identity or only value equality
 - Add examples showing the distinction
 
-### 10. Document Closure Equality Semantics ⏳
+**Status**: ✅ **Complete** - Added to "Equality for Deduplication" section with examples showing value equality semantics and scope handling.
+
+### 10. Document Closure Equality Semantics ✅
 **Dependencies**: #2
 - Document closure equality rules for deduplication
 - Add examples showing closure equality scenarios
 
-### 11. Specify Closure Materialization Rules ⏳
+**Status**: ✅ **Complete** - Added "Closure Equality for Deduplication" section with examples showing equivalent closures with different names are not deduplicated.
+
+### 11. Specify Closure Materialization Rules ✅
 **Dependencies**: #3
 - Document when nested closures are serialized vs deferred
 - Add examples of closure-in-closure scenarios
 
-### 12. Clarify Var/Binding Reference Usage ⏳
+**Status**: ✅ **Complete** - Added "Closure Materialization Rules" section explaining immediate materialization with nested closure example.
+
+### 12. Clarify Var/Binding Reference Usage ✅
 **Dependencies**: #4
 - Document when to use binding identifiers vs Var patterns in bodies
 - Add clear examples showing the distinction
 - Explain evaluation semantics for each
 
-### 13. Address Cycle Handling ⏳
+**Status**: ✅ **Complete** - Covered in "Parameters vs Bound Values" section with examples and evaluation semantics.
+
+### 13. Address Cycle Handling ✅
 **Dependencies**: #5
 - Document support (or lack thereof) for recursive closures
 - Specify how cycles in binding graph are handled
 
-### 14. Document Deserialization Pattern Matching ⏳
+**Status**: ✅ **Complete** - Added "Recursive and Mutually Recursive Closures" section with examples of mutual recursion, self-recursion, and cycle handling explanation.
+
+### 14. Document Deserialization Pattern Matching ✅
 **Dependencies**: #6
 - Clarify how runtime identifies closures vs lists vs other forms
 - Document the deserialization decision tree
 
-### 15. Standard Library Versioning Strategy ⏳
+**Status**: ✅ **Complete** - Enhanced "Step 5: Convert Pattern Subjects to S-expressions" with detailed pattern matching rules and decision tree.
+
+### 15. Standard Library Versioning Strategy ✅
 **Dependencies**: #7
 - Define versioning approach for standard library
 - Specify how runtime compatibility is determined
 - Document error handling for missing primitives
+
+**Status**: ✅ **Complete** - Added "Standard Library Versioning" subsection noting this is a runtime concern and documenting current behavior and future flexibility.
 
 ---
 

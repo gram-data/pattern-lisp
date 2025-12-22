@@ -42,6 +42,18 @@ test-suite pattern-lisp-test
   type:                exitcode-stdio-1.0
   main-is:             Spec.hs
   hs-source-dirs:      test
+  other-modules:       ExamplesSpec
+                     , IntegrationSpec
+                     , PatternLisp.CodecSpec
+                     , PatternLisp.EvalSpec
+                     , PatternLisp.GramSerializationSpec
+                     , PatternLisp.GramSpec
+                     , PatternLisp.ParserSpec
+                     , PatternLisp.PatternSpec
+                     , PatternLisp.PrimitivesSpec
+                     , PatternLisp.RuntimeSpec
+                     , Properties
+                     , REPLSpec
   build-depends:       base >=4.18 && <5
                      , pattern-lisp
                      , hspec

@@ -211,10 +211,9 @@ evalPatternToValue pat = do
   let decoration = PatternCore.value pat
   -- Check if this is a Closure pattern
   if "Closure" `Set.member` labels decoration then do
-    -- Convert Pattern Subject to Subject, then to Value
-    -- This will handle Closure patterns correctly
-    let patternSubject = valueToSubject (VPattern pat)
-    case subjectToValue patternSubject of
+    -- For Closure patterns, use patternSubjectToValue directly
+    -- (valueToSubject/subjectToValue path is for property storage, not Pattern serialization)
+    case patternSubjectToValue pat of
       Left err -> throwError err
       Right val -> return val
   else do

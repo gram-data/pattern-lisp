@@ -52,6 +52,11 @@ module PatternLisp.Codec
   , subjectToEnv
   , subjectToBinding
   , patternSubjectToExpr
+  -- Gram serialization functions (Phase 5)
+  , valueToPatternSubjectForGram
+  , patternSubjectToValue
+  , programToGram
+  , gramToProgram
   ) where
 
 import PatternLisp.Syntax
@@ -65,10 +70,18 @@ import qualified Subject.Value as SubjectValue
 import qualified Data.Text as T
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Gram.Serialize (toGram)
+import Gram.Parse (fromGram)
 
 -- ============================================================================
 -- Helper Functions (for property storage)
 -- ============================================================================
+
+-- NOTE: patternToSubject removed - it was incorrect. A Pattern already has a Subject
+-- (its decoration). Converting Pattern -> Subject by storing decoration/elements in
+-- properties is redundant and lossy. For storing Patterns in Subject properties, we
+-- should just use the Pattern's decoration Subject directly, or use Pattern Subject
+-- serialization instead.
 
 -- | Helper to convert Subject to SubjectValue (for storing in properties)
 subjectToSubjectValue :: Subject -> SubjectValue.Value
@@ -119,17 +132,55 @@ extractStringFromValue _ = Left $ TypeMismatch "Expected VString in labels array
 -- For the main conversion function, see PatternLisp.PatternPrimitives.exprToPatternSubject.
 
 -- | Converts a Pattern Subject back to expression AST.
--- This handles the case where List Exprs are represented as Pattern Subjects with elements.
+-- Handles special form labels: :If, :Let, :Begin, :Define, :Quote
 patternSubjectToExpr :: Pattern Subject -> Either Error Expr
-patternSubjectToExpr pat
-  | "List" `Set.member` labels (PatternCore.value pat) = do
-      -- List pattern: extract elements and convert recursively
-      elementPatterns <- return $ PatternCore.elements pat
-      exprs <- mapM patternSubjectToExpr elementPatterns
-      Right $ List exprs
-  | otherwise = do
-      -- Atomic pattern: convert decoration Subject to Expr
-      subjectToExpr (PatternCore.value pat)
+patternSubjectToExpr pat = do
+  let subj = PatternCore.value pat
+      lbls = labels subj
+      elements = PatternCore.elements pat
+  if "If" `Set.member` lbls then do
+    -- If special form: [:If | cond, then, else] -> (if cond then else)
+    case elements of
+      [cond, thenExpr, elseExpr] -> do
+        condExpr <- patternSubjectToExpr cond
+        thenExpr' <- patternSubjectToExpr thenExpr
+        elseExpr' <- patternSubjectToExpr elseExpr
+        Right $ List [Atom (Symbol "if"), condExpr, thenExpr', elseExpr']
+      _ -> Left $ TypeMismatch "If pattern must have 3 elements" (VList [])
+  else if "Let" `Set.member` lbls then do
+    -- Let special form: [:Let | bindings, body] -> (let bindings body)
+    case elements of
+      [bindingsExpr, bodyExpr] -> do
+        bindings <- patternSubjectToExpr bindingsExpr
+        bodyExpr' <- patternSubjectToExpr bodyExpr
+        Right $ List [Atom (Symbol "let"), bindings, bodyExpr']
+      _ -> Left $ TypeMismatch "Let pattern must have 2 elements" (VList [])
+  else if "Begin" `Set.member` lbls then do
+    -- Begin special form: [:Begin | expr1, expr2, ...] -> (begin expr1 expr2 ...)
+    exprs <- mapM patternSubjectToExpr elements
+    Right $ List (Atom (Symbol "begin") : exprs)
+  else if "Define" `Set.member` lbls then do
+    -- Define special form: [:Define | name, value] -> (define name value)
+    case elements of
+      [nameExpr, valueExpr] -> do
+        name <- patternSubjectToExpr nameExpr
+        value <- patternSubjectToExpr valueExpr
+        Right $ List [Atom (Symbol "define"), name, value]
+      _ -> Left $ TypeMismatch "Define pattern must have 2 elements" (VList [])
+  else if "Quote" `Set.member` lbls then do
+    -- Quote special form: [:Quote | expr] -> (quote expr) or 'expr
+    case elements of
+      [exprPat] -> do
+        expr <- patternSubjectToExpr exprPat
+        Right $ Quote expr
+      _ -> Left $ TypeMismatch "Quote pattern must have 1 element" (VList [])
+  else if "List" `Set.member` lbls then do
+    -- List pattern: extract elements and convert recursively
+    exprs <- mapM patternSubjectToExpr elements
+    Right $ List exprs
+  else do
+    -- Atomic pattern: convert decoration Subject to Expr
+    subjectToExpr subj
 
 -- ============================================================================
 -- Secondary Path: Expression <-> Subject (for property storage)
@@ -237,60 +288,23 @@ valueToSubject (VList vs) = Subject
   , labels = Set.fromList ["List"]
   , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . valueToSubject) vs))]
   }
-valueToSubject (VPattern pat) = patternToSubject pat
-  where
-    -- Convert Pattern to Subject: store decoration and elements in properties
-    -- Since Subject doesn't have elements, we store Pattern structure in properties
-    patternToSubject :: Pattern Subject -> Subject
-    patternToSubject p = Subject
-      { identity = SubjectCore.Symbol ""
-      , labels = Set.fromList ["Pattern"]
-      , properties = Map.fromList 
-          [ ("decoration", subjectToSubjectValue (PatternCore.value p))
-          , ("elements", SubjectValue.VArray (map (subjectToSubjectValue . patternToSubject) (PatternCore.elements p)))
-          ]
-      }
+valueToSubject (VPattern pat) = 
+  -- A Pattern already has a Subject (its decoration). For property storage,
+  -- we just return the decoration Subject. Note: This loses the elements,
+  -- but Subject properties can't store Patterns directly anyway.
+  -- For proper Pattern serialization, use valueToPatternSubjectForGram instead.
+  PatternCore.value pat
 valueToSubject (VClosure closure) = 
-  -- Closures are serialized as Pattern Subject, then stored in a Subject
-  -- using the Pattern serialization format (decoration + elements in properties)
-  -- The body Expr must be converted to Pattern Subject format (not just Subject)
-  let bodyPattern = exprToPatternSubjectForCodec (body closure)
-      patternPat = patternWith 
-        (SubjectCore.Subject
-          { identity = SubjectCore.Symbol ""
-          , labels = Set.fromList ["Closure"]
-          , properties = Map.fromList 
-              [ ("params", SubjectValue.VArray (map SubjectValue.VString (params closure)))
-              ]
-          })
-        [bodyPattern]
-  in patternToSubject patternPat
-  where
-    -- Helper to convert Expr to Pattern Subject (for use in valueToSubject)
-    -- This handles List Exprs correctly by creating Pattern Subjects with elements
-    exprToPatternSubjectForCodec :: Expr -> Pattern Subject
-    exprToPatternSubjectForCodec (List exprs) =
-      -- List Expr: represent as Pattern Subject with elements
-      let decoration = SubjectCore.Subject
-            { identity = SubjectCore.Symbol ""
-            , labels = Set.fromList ["List"]
-            , properties = Map.empty
-            }
-          elementPatterns = map exprToPatternSubjectForCodec exprs
-      in patternWith decoration elementPatterns
-    exprToPatternSubjectForCodec expr =
-      -- For atoms and other Exprs: convert to Subject, then wrap in atomic pattern
-      pattern (exprToSubject expr)
-    
-    patternToSubject :: Pattern Subject -> Subject
-    patternToSubject p = Subject
-      { identity = SubjectCore.Symbol ""
-      , labels = Set.fromList ["Pattern"]
-      , properties = Map.fromList 
-          [ ("decoration", subjectToSubjectValue (PatternCore.value p))
-          , ("elements", SubjectValue.VArray (map (subjectToSubjectValue . patternToSubject) (PatternCore.elements p)))
-          ]
-      }
+  -- For property storage, we just return the decoration Subject with closure metadata.
+  -- Note: This loses the body expression. For proper Closure serialization,
+  -- use valueToPatternSubjectForGram or closureToPatternSubject instead.
+  Subject
+    { identity = SubjectCore.Symbol ""
+    , labels = Set.fromList ["Closure"]
+    , properties = Map.fromList 
+        [ ("params", SubjectValue.VArray (map SubjectValue.VString (params closure)))
+        ]
+    }
 valueToSubject (VPrimitive prim) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Primitive"]
@@ -349,37 +363,10 @@ subjectToValue subj
       vals <- mapM subjectToValue elementSubjects
       Right $ VList vals
   | "Pattern" `Set.member` labels subj = do
-      -- Pattern stores decoration and elements in properties
-      decorationVal <- case Map.lookup "decoration" (properties subj) of
-        Just v -> subjectValueToSubject v
-        Nothing -> Left $ TypeMismatch "Pattern Subject missing decoration property" (VList [])
-      elementsVal <- case Map.lookup "elements" (properties subj) of
-        Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "Pattern Subject missing elements property" (VList [])
-      elementSubjects <- mapM subjectValueToSubject elementsVal
-      -- Check if this Pattern represents a Closure (decoration has "Closure" label)
-      if "Closure" `Set.member` labels decorationVal then do
-        -- This is a Closure serialized as Pattern Subject
-        -- Extract params from decoration properties
-        paramsList <- case Map.lookup "params" (properties decorationVal) of
-          Just (SubjectValue.VArray paramStrs) -> do
-            paramNames <- mapM extractString paramStrs
-            Right paramNames
-          _ -> Left $ TypeMismatch "Closure Pattern decoration missing params property" (VList [])
-        -- Extract body from first element (should be Pattern Subject representing body Expr)
-        case elementSubjects of
-          [bodyPatternSubject] -> do
-            -- The body element is a Pattern Subject (stored as Subject with "Pattern" label)
-            -- Convert it back to Pattern Subject, then to Expr
-            bodyPattern <- subjectToPatternFromSubject bodyPatternSubject
-            bodyExpr <- patternSubjectToExpr bodyPattern
-            Right $ VClosure (Closure paramsList bodyExpr initialEnv)
-          _ -> Left $ TypeMismatch "Closure Pattern must have exactly one element (body)" (VList [])
-      else do
-        -- Regular Pattern: create pattern with decoration and elements
-        elementPatterns <- mapM subjectToPatternFromSubject elementSubjects
-        let pat = patternWith decorationVal elementPatterns
-        Right $ VPattern pat
+      -- NOTE: Pattern reconstruction from Subject properties is not supported.
+      -- The patternToSubject function was incorrect and has been removed.
+      -- For Pattern serialization, use patternSubjectToValue instead.
+      Left $ TypeMismatch "Pattern Subject reconstruction from properties is not supported. Use patternSubjectToValue for Pattern deserialization." (VList [])
   | "Primitive" `Set.member` labels subj =
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) ->
@@ -389,10 +376,8 @@ subjectToValue subj
         _ -> Left $ TypeMismatch "Primitive Subject missing name property" (VList [])
   | otherwise = Left $ TypeMismatch ("Unknown Subject label: " ++ show (Set.toList (labels subj))) (VList [])
 
--- | Helper to extract string from SubjectValue
-extractString :: SubjectValue.Value -> Either Error String
-extractString (SubjectValue.VString s) = Right s
-extractString _ = Left $ TypeMismatch "Expected string in params list" (VList [])
+-- NOTE: subjectToPatternFromSubject removed - it was used for the incorrect patternToSubject
+-- conversion. Patterns should be serialized as Pattern Subject, not converted to Subject.
 
 -- | Converts a Subject representation back to an environment.
 -- Note: Not currently used for Closure deserialization since env is not serialized.
@@ -427,23 +412,297 @@ subjectToBinding subj
 -- ============================================================================
 -- Pattern Subject Helpers (for deserialization)
 -- ============================================================================
+-- NOTE: subjectToPatternFromSubject removed - it was used for the incorrect
+-- patternToSubject conversion. Patterns should be serialized as Pattern Subject
+-- directly, not converted to Subject for property storage.
 
--- | Converts a Subject back to a Pattern (recursive helper).
--- Used when deserializing Pattern Subject from Subject properties.
-subjectToPatternFromSubject :: Subject -> Either Error (Pattern Subject)
-subjectToPatternFromSubject subj
-  | "Pattern" `Set.member` labels subj = do
-      -- Pattern stores decoration and elements in properties
-      decorationVal <- case Map.lookup "decoration" (properties subj) of
-        Just v -> subjectValueToSubject v
-        Nothing -> Left $ TypeMismatch "Pattern Subject missing decoration property" (VList [])
-      elementsVal <- case Map.lookup "elements" (properties subj) of
-        Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "Pattern Subject missing elements property" (VList [])
-      elementSubjects <- mapM subjectValueToSubject elementsVal
-      elementPatterns <- mapM subjectToPatternFromSubject elementSubjects
-      -- Create pattern with decoration and elements
-      Right $ patternWith decorationVal elementPatterns
-  | otherwise = Left $ TypeMismatch "Expected Pattern Subject" (VList [])
+-- ============================================================================
+-- Gram Serialization Functions (Phase 5)
+-- ============================================================================
+-- These functions implement the Gram serialization design from
+-- docs/plisp-serialization-design.md
+--
+-- Key design principles:
+-- * File-level property records for metadata
+-- * Optional Environment section for shared bindings
+-- * Expressions as patterns in file sequence
+-- * Closure structure: [:Closure | [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]]]
+-- * Special form labels: :If, :Let, :Begin, :Define, :Quote
+-- * Parameters vs bound values distinction
+-- * Binding deduplication by (name, value) pairs
+-- * Recursive closure support via forward references
+-- * Standard library filtering
 
+-- | Converts a Value to Pattern Subject for Gram serialization.
+-- This follows the design in docs/plisp-serialization-design.md
+-- This is a pure function for serialization (unlike PatternPrimitives.valueToPatternSubject which is monadic)
+valueToPatternSubjectForGram :: Value -> Pattern Subject
+valueToPatternSubjectForGram (VNumber n) = pattern $ Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Number"]
+  , properties = Map.fromList [("value", SubjectValue.VInteger n)]
+  }
+valueToPatternSubjectForGram (VString s) = pattern $ Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["String"]
+  , properties = Map.fromList [("value", SubjectValue.VString (T.unpack s))]
+  }
+valueToPatternSubjectForGram (VBool b) = pattern $ Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Bool"]
+  , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
+  }
+valueToPatternSubjectForGram (VList vs) = patternWith
+  (Subject
+    { identity = SubjectCore.Symbol ""
+    , labels = Set.fromList ["List"]
+    , properties = Map.empty
+    })
+  (map valueToPatternSubjectForGram vs)
+valueToPatternSubjectForGram (VPattern pat) = pat
+valueToPatternSubjectForGram (VPrimitive prim) = pattern $ Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Primitive"]
+  , properties = Map.fromList [("name", SubjectValue.VString (primitiveName prim))]
+  }
+valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
+
+-- | Converts a Pattern Subject back to a Value.
+-- This is the inverse of valueToPatternSubject.
+patternSubjectToValue :: Pattern Subject -> Either Error Value
+patternSubjectToValue pat = do
+  let subj = PatternCore.value pat
+  case Set.toList (labels subj) of
+    ["Number"] -> do
+      val <- case Map.lookup "value" (properties subj) of
+        Just (SubjectValue.VInteger n) -> Right n
+        _ -> Left $ TypeMismatch "Number pattern missing value property" (VList [])
+      Right $ VNumber val
+    ["String"] -> do
+      val <- case Map.lookup "value" (properties subj) of
+        Just (SubjectValue.VString s) -> Right s
+        _ -> Left $ TypeMismatch "String pattern missing value property" (VList [])
+      Right $ VString (T.pack val)
+    ["Bool"] -> do
+      val <- case Map.lookup "value" (properties subj) of
+        Just (SubjectValue.VBoolean b) -> Right b
+        _ -> Left $ TypeMismatch "Bool pattern missing value property" (VList [])
+      Right $ VBool val
+    ["List"] -> do
+      let elements = PatternCore.elements pat
+      vals <- mapM patternSubjectToValue elements
+      Right $ VList vals
+    ["Primitive"] -> do
+      name <- case Map.lookup "name" (properties subj) of
+        Just (SubjectValue.VString n) -> Right n
+        _ -> Left $ TypeMismatch "Primitive pattern missing name property" (VList [])
+      case primitiveFromName name of
+        Just prim -> Right $ VPrimitive prim
+        Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VList [])
+    ["Closure"] -> do
+      closure <- patternSubjectToClosure pat
+      Right $ VClosure closure
+    _ -> Left $ TypeMismatch ("Unknown pattern label: " ++ show (Set.toList (labels subj))) (VList [])
+
+-- | Pure version of exprToPatternSubject for use in Codec (avoids circular dependency)
+-- Handles special forms with explicit labels: :If, :Let, :Begin, :Define, :Quote
+exprToPatternSubjectPure :: Expr -> Pattern Subject
+exprToPatternSubjectPure (List exprs) =
+  -- Check if this is a special form
+  case exprs of
+    (Atom (Symbol "if")):cond:thenExpr:elseExpr:[] ->
+      -- If special form: [:If | cond, then, else]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["If"]
+            , properties = Map.empty
+            }
+          elementPatterns = map exprToPatternSubjectPure [cond, thenExpr, elseExpr]
+      in patternWith decoration elementPatterns
+    (Atom (Symbol "let")):bindingsExpr:bodyExpr:[] ->
+      -- Let special form: [:Let | bindings, body]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["Let"]
+            , properties = Map.empty
+            }
+          elementPatterns = map exprToPatternSubjectPure [bindingsExpr, bodyExpr]
+      in patternWith decoration elementPatterns
+    (Atom (Symbol "begin")):rest ->
+      -- Begin special form: [:Begin | expr1, expr2, ...]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["Begin"]
+            , properties = Map.empty
+            }
+          elementPatterns = map exprToPatternSubjectPure rest
+      in patternWith decoration elementPatterns
+    (Atom (Symbol "define")):nameExpr:valueExpr:[] ->
+      -- Define special form: [:Define | name, value]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["Define"]
+            , properties = Map.empty
+            }
+          elementPatterns = map exprToPatternSubjectPure [nameExpr, valueExpr]
+      in patternWith decoration elementPatterns
+    (Atom (Symbol "quote")):expr:[] ->
+      -- Quote special form: [:Quote | expr]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["Quote"]
+            , properties = Map.empty
+            }
+          elementPatterns = [exprToPatternSubjectPure expr]
+      in patternWith decoration elementPatterns
+    _ ->
+      -- Regular function call or list: [:List | ...]
+      let decoration = Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["List"]
+            , properties = Map.empty
+            }
+          elementPatterns = map exprToPatternSubjectPure exprs
+      in patternWith decoration elementPatterns
+exprToPatternSubjectPure (Quote expr) =
+  -- Quote expression: [:Quote | expr]
+  let decoration = Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["Quote"]
+        , properties = Map.empty
+        }
+      elementPatterns = [exprToPatternSubjectPure expr]
+  in patternWith decoration elementPatterns
+exprToPatternSubjectPure expr =
+  -- For atoms: convert to Subject, then wrap in atomic pattern
+  let subject = exprToSubject expr
+      pat = pattern subject
+  in pat
+
+-- | Converts a Closure to Pattern Subject using the design format:
+-- [:Closure | [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]]]
+-- TODO: Implement binding collection, deduplication, and environment section
+closureToPatternSubject :: Closure -> Pattern Subject
+closureToPatternSubject (Closure paramNames bodyExpr _capturedEnv) =
+  -- Convert body expression to Pattern Subject
+  let bodyPattern = exprToPatternSubjectPure bodyExpr
+      -- Create parameters pattern with parameter names as elements
+      -- Each parameter is a Symbol pattern
+      paramPatterns = map (\name -> pattern $ Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["Symbol"]
+        , properties = Map.fromList [("name", SubjectValue.VString name)]
+        }) paramNames
+      paramsPattern = if null paramPatterns
+        then pattern $ Subject
+          { identity = SubjectCore.Symbol ""
+          , labels = Set.fromList ["Parameters"]
+          , properties = Map.empty
+          }
+        else patternWith
+          (Subject
+            { identity = SubjectCore.Symbol ""
+            , labels = Set.fromList ["Parameters"]
+            , properties = Map.empty
+            })
+          paramPatterns
+      -- Create environment pattern (empty for now, will be populated with bindings)
+      envPattern = pattern $ Subject
+        { identity = SubjectCore.Symbol ""
+        , labels = Set.fromList ["Env"]
+        , properties = Map.empty
+        }
+      -- Create lambda pattern with parameters and body
+      lambdaPattern = patternWith
+        (Subject
+          { identity = SubjectCore.Symbol ""
+          , labels = Set.fromList ["Lambda"]
+          , properties = Map.empty
+          })
+        [paramsPattern, bodyPattern]
+  in patternWith
+    (Subject
+      { identity = SubjectCore.Symbol ""
+      , labels = Set.fromList ["Closure"]
+      , properties = Map.empty
+      })
+    [envPattern, lambdaPattern]
+
+-- | Converts a Pattern Subject back to a Closure.
+-- Extracts [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]] structure
+-- TODO: Implement full binding resolution from environment section
+patternSubjectToClosure :: Pattern Subject -> Either Error Closure
+patternSubjectToClosure pat = do
+  let subj = PatternCore.value pat
+  if "Closure" `Set.member` labels subj
+    then do
+      let elements = PatternCore.elements pat
+      -- Closure should have 2 elements: [:Env | ...] and [:Lambda | ...]
+      if length elements /= 2
+        then Left $ TypeMismatch "Closure pattern must have 2 elements (Env and Lambda)" (VList [])
+        else do
+          let _envPat = elements !! 0  -- Will be used for binding resolution
+              lambdaPat = elements !! 1
+          -- Extract environment (for now, use empty - will be resolved from environment section)
+          let capturedEnv = initialEnv
+          -- Extract lambda structure
+          let lambdaSubj = PatternCore.value lambdaPat
+          if "Lambda" `Set.member` labels lambdaSubj
+            then do
+              let lambdaElements = PatternCore.elements lambdaPat
+              -- Lambda should have 2 elements: [:Parameters | ...] and [:Body | ...]
+              if length lambdaElements /= 2
+                then Left $ TypeMismatch "Lambda pattern must have 2 elements (Parameters and Body)" (VList [])
+                else do
+                  let paramsPat = lambdaElements !! 0
+                      bodyPat = lambdaElements !! 1
+                  -- Extract parameters
+                  let paramsSubj = PatternCore.value paramsPat
+                  if "Parameters" `Set.member` labels paramsSubj
+                    then do
+                      let paramElements = PatternCore.elements paramsPat
+                      paramNames <- mapM extractParamName paramElements
+                      -- Extract body
+                      bodyExpr <- patternSubjectToExpr bodyPat
+                      Right $ Closure paramNames bodyExpr capturedEnv
+                    else Left $ TypeMismatch "Expected Parameters pattern" (VList [])
+            else Left $ TypeMismatch "Expected Lambda pattern" (VList [])
+    else Left $ TypeMismatch "Expected Closure pattern" (VList [])
+
+-- | Helper to extract parameter name from a Symbol pattern
+extractParamName :: Pattern Subject -> Either Error String
+extractParamName pat = do
+  let subj = PatternCore.value pat
+  if "Symbol" `Set.member` labels subj
+    then case Map.lookup "name" (properties subj) of
+      Just (SubjectValue.VString name) -> Right name
+      _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VList [])
+    else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VList [])
+
+-- | Serializes a program (list of values) to Gram notation with file-level structure.
+-- TODO: Implement file-level property records, environment section, expressions
+programToGram :: [Value] -> Env -> String
+programToGram values _runtimeEnv = 
+  -- For now, serialize each value separately
+  -- Full implementation will:
+  -- 1. Create file-level property record {kind: "Pattern Lisp", ...}
+  -- 2. Collect all bindings from closures, deduplicate, create Environment section
+  -- 3. Serialize expressions as patterns in file sequence
+  unlines $ map (\v -> toGram (valueToPatternSubjectForGram v)) values
+
+-- | Deserializes Gram notation to a program (list of values and environment).
+-- TODO: Implement file-level parsing, environment section parsing, expressions parsing
+gramToProgram :: String -> Either Error ([Value], Env)
+gramToProgram gramText = do
+  -- For now, parse as single pattern
+  -- Full implementation will:
+  -- 1. Parse file-level property record
+  -- 2. Parse optional Environment section
+  -- 3. Parse remaining patterns as expressions
+  -- 4. Merge environment with standard library
+  pat <- case fromGram gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right p -> Right p
+  val <- patternSubjectToValue pat
+  Right ([val], initialEnv)
 
