@@ -22,7 +22,7 @@ module PatternLisp.Gram
   ) where
 
 import PatternLisp.Syntax
-import PatternLisp.Subject
+import PatternLisp.Codec
 import Pattern (Pattern)
 import Pattern.Core (pattern)
 import qualified Pattern.Core as PatternCore

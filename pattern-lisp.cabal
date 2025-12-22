@@ -10,7 +10,7 @@ library
                      , PatternLisp.Primitives
                      , PatternLisp.PatternPrimitives
                      , PatternLisp.Runtime
-                     , PatternLisp.Subject
+                     , PatternLisp.Codec
                      , PatternLisp.Gram
                      , PatternLisp.FileLoader
   hs-source-dirs:      src

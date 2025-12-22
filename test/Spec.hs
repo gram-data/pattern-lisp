@@ -6,7 +6,7 @@ import qualified PatternLisp.PrimitivesSpec
 import qualified PatternLisp.EvalSpec
 import qualified PatternLisp.PatternSpec
 import qualified PatternLisp.RuntimeSpec
-import qualified PatternLisp.SubjectSpec
+import qualified PatternLisp.CodecSpec
 import qualified PatternLisp.GramSpec
 import qualified PatternLisp.GramSerializationSpec
 import qualified REPLSpec
@@ -22,7 +22,7 @@ main = hspec $ do
     PatternLisp.EvalSpec.spec
     PatternLisp.PatternSpec.spec
     PatternLisp.RuntimeSpec.spec
-    PatternLisp.SubjectSpec.spec
+    PatternLisp.CodecSpec.spec
     PatternLisp.GramSpec.spec
     PatternLisp.GramSerializationSpec.spec
     REPLSpec.spec

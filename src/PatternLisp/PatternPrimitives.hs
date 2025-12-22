@@ -26,7 +26,7 @@ module PatternLisp.PatternPrimitives
   ) where
 
 import PatternLisp.Syntax
-import PatternLisp.Subject
+import PatternLisp.Codec
 import Pattern (Pattern)
 import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore

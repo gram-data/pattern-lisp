@@ -7,7 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.PatternPrimitives
 import PatternLisp.Gram
-import PatternLisp.Subject
+import PatternLisp.Codec
 import Pattern (Pattern)
 import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore
