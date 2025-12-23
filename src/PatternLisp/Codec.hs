@@ -484,7 +484,11 @@ valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool 
 valueToPatternSubjectForGram (VList vs) = patternWith
   (valueToSubjectForGram (VList []))
   (map valueToPatternSubjectForGram vs)
-valueToPatternSubjectForGram (VPattern pat) = pat
+valueToPatternSubjectForGram (VPattern pat) = 
+  -- A VPattern value is semantically a Pattern Subject with label "Pattern"
+  -- containing the inner pattern as an element.
+  -- Example: (pattern 42) → [:Pattern | [:Number {value: 42}]]
+  patternWith (Subject { identity = SubjectCore.Symbol "", labels = Set.fromList ["Pattern"], properties = Map.empty }) [pat]
 valueToPatternSubjectForGram (VPrimitive prim) = pattern $ valueToSubjectForGram (VPrimitive prim)
 valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
 
@@ -500,9 +504,13 @@ patternSubjectToValue pat = do
         _ -> Left $ TypeMismatch "Number pattern missing value property" (VList [])
       Right $ VNumber val
     ["String"] -> do
+      -- Support both "value" (Gram serialization) and "text" (legacy property storage)
       val <- case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VString s) -> Right s
-        _ -> Left $ TypeMismatch "String pattern missing value property" (VList [])
+        Nothing -> case Map.lookup "text" (properties subj) of
+          Just (SubjectValue.VString s) -> Right s
+          _ -> Left $ TypeMismatch "String pattern missing value or text property" (VList [])
+        _ -> Left $ TypeMismatch "String pattern missing value or text property" (VList [])
       Right $ VString (T.pack val)
     ["Bool"] -> do
       val <- case Map.lookup "value" (properties subj) of
@@ -523,6 +531,12 @@ patternSubjectToValue pat = do
     ["Closure"] -> do
       closure <- patternSubjectToClosure pat
       Right $ VClosure closure
+    ["Pattern"] -> do
+      -- This is a VPattern value: [:Pattern | innerPattern]
+      -- Extract the inner pattern and return it as VPattern
+      case PatternCore.elements pat of
+        [innerPat] -> Right $ VPattern innerPat
+        _ -> Left $ TypeMismatch "Pattern label must have exactly one element" (VList [])
     _ -> 
       -- Generic pattern: if it doesn't match any specific value type,
       -- it's already a Pattern, so return it as VPattern
