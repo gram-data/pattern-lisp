@@ -67,23 +67,23 @@ exprToPatternSubject expr = do
 -- | Creates an atomic Pattern from a Value.
 --
 -- Converts the Value to a Subject and creates an atomic Pattern with that
--- Subject as decoration.
+-- Subject as decoration. Uses Gram serialization approach for consistency.
 evalPatternCreate :: Value -> EvalM Value
 evalPatternCreate val = do
-  -- Convert Value to Subject using full serialization
-  let subject = valueToSubject val
-      pat = pattern subject
+  -- Use Gram serialization approach for Subject decoration
+  -- For closures, this creates the full closure structure (not just decoration)
+  let pat = valueToPatternSubjectForGram val
   return $ VPattern pat
 
 -- | Creates a Pattern with elements.
 --
 -- Takes a decoration Value and a list of element Values (which should be
 -- VPattern values or convertible to patterns), and creates a Pattern with
--- those elements.
+-- those elements. Uses Gram serialization approach for consistency.
 evalPatternWith :: Value -> [Value] -> EvalM Value
 evalPatternWith decorationVal elementVals = do
-  -- Convert decoration to Subject using full serialization
-  let decoration = valueToSubject decorationVal
+  -- Use Gram serialization approach for Subject decoration
+  let decoration = valueToSubjectForGram decorationVal
   -- Convert elements: expect VPattern values
   patternElements <- mapM expectPattern elementVals
   -- Create pattern with elements
@@ -191,10 +191,9 @@ valueToPatternSubject (VClosure (Closure paramNames bodyExpr _capturedEnv)) = do
   bodyPattern <- exprToPatternSubject bodyExpr
   return $ patternWith decoration [bodyPattern]
 valueToPatternSubject val = do
-  -- For atoms and other values: convert to Subject, then wrap in atomic pattern
-  let subject = valueToSubject val
-      pat = pattern subject
-  return pat
+  -- For atoms and other values: use Gram serialization approach
+  -- This ensures consistency with serialization format
+  return $ valueToPatternSubjectForGram val
 
 -- | Converts any Value to a Pattern.
 -- This is the primitive version of valueToPatternSubject that returns VPattern.

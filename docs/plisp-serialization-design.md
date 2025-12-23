@@ -217,10 +217,10 @@ The Environment (optional) contains bindings that are shared across multiple clo
 
 ```gram
 [:Environment |
-  b1:[:Binding {name: "config"} |
+  [ b1:Binding {name: "config"} |
     [:Record {threshold: 50, rate: 0.08}]
   ],
-  b2:[:Binding {name: "helper"} |
+  [ b2:Binding {name: "helper"} |
     [:Closure | ...]
   ]
 ]
@@ -319,7 +319,7 @@ Serialized:
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  b1:[:Binding {name: "config"} |
+  [ b1:Binding {name: "config"} |
     [:Record {threshold: 50}]
   ]
 ]
@@ -381,7 +381,7 @@ Here `b1`, `b2` are Gram identifiers that refer to specific binding patterns in 
 Example showing both:
 
 ```gram
-b1:[:Binding {name: "num"} |
+[ b1:Binding {name: "num"} |
   [:Number {value: 10}]
 ]
 
@@ -424,7 +424,7 @@ Serialized:
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  cfg:[:Binding {name: "config"} |
+  [ cfg:Binding {name: "config"} |
     [:Record {threshold: 50}]
   ]
 ]
@@ -483,7 +483,7 @@ Two bindings are considered equal if:
 ```
 
 Both closures capture `x` with value `10` from the same scope. These are the **same binding**, so:
-- One binding pattern is created: `x_1:[:Binding {name: "x"} | [:Number {value: 10}]]`
+- One binding pattern is created: `[ x_1:Binding {name: "x"} | [:Number {value: 10}] ]`
 - Both closures reference `x_1` in their `[:Env | ...]` sections
 
 **Example: Different scopes, same name and value**:
@@ -553,9 +553,9 @@ Both closures capture `helper` with the same closure value. These are the **same
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  helper_binding:[:Binding {name: "helper"} |
+  [ helper_binding:Binding {name: "helper"} |
     [:Closure |
-      [:Env |],
+      [:Env],
       [:Lambda |
         [:Parameters | x],
         [:Body |
@@ -629,7 +629,7 @@ Closure captures: `{"+": Primitive, "config": {:threshold 50}}`
 Serialized Environment:
 ```gram
 [:Environment |
-  cfg:[:Binding {name: "config"} |
+  [ cfg:Binding {name: "config"} |
     [:Record {threshold: 50}]
   ]
   ; "+" is NOT serialized - it's in standard library
@@ -651,8 +651,8 @@ Deserialized environment: `standard library ∪ {config: ...}` = full environmen
 **Serialization Format Flexibility**:
 - The serialization format could support metadata fields (like `description` and `version`) in bindings as an extension
 - This would be an optional enhancement, not a requirement
-- Current format: `[:Binding {name: "..."} | value]`
-- Future format (optional): `[:Binding {name: "...", description: "...", version: "..."} | value]`
+- Current format: `[ identifier:Binding {name: "..."} | value ]`
+- Future format (optional): `[ identifier:Binding {name: "...", description: "...", version: "..."} | value ]`
 
 **Current Behavior**:
 - Primitives serialize as `[:Primitive {name: "..."}]` (symbolic reference)
@@ -747,7 +747,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  f_binding:[:Binding {name: "f"} |
+  [ f_binding:Binding {name: "f"} |
     [:Closure |
       [:Env | g_binding],
       [:Lambda |
@@ -765,7 +765,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
       ]
     ]
   ],
-  g_binding:[:Binding {name: "g"} |
+  [ g_binding:Binding {name: "g"} |
     [:Closure |
       [:Env | f_binding],
       [:Lambda |
@@ -785,7 +785,22 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
   ]
 ]
 
-f_binding
+[:Closure |
+  [:Env | g_binding],
+  [:Lambda |
+    [:Parameters | x],
+    [:Body |
+      [:If |
+        [:List | [:Symbol {name: "="}], x, [:Number {value: 0}]],
+        [:Number {value: 1}],
+        [:List |
+          [:Symbol {name: "g"}],
+          [:List | [:Symbol {name: "-"}], x, [:Number {value: 1}]]
+        ]
+      ]
+    ]
+  ]
+]
 ```
 
 **Key observations**:
@@ -812,7 +827,7 @@ f_binding
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  fact_binding:[:Binding {name: "fact"} |
+  [ fact_binding:Binding {name: "fact"} |
     [:Closure |
       [:Env | fact_binding],  ; Self-reference!
       [:Lambda |
@@ -836,7 +851,26 @@ f_binding
   ]
 ]
 
-fact_binding
+[:Closure |
+  [:Env | fact_binding],
+  [:Lambda |
+    [:Parameters | n],
+    [:Body |
+      [:If |
+        [:List | [:Symbol {name: "="}], n, [:Number {value: 0}]],
+        [:Number {value: 1}],
+        [:List |
+          [:Symbol {name: "*"}],
+          n,
+          [:List |
+            [:Symbol {name: "fact"}],
+            [:List | [:Symbol {name: "-"}], n, [:Number {value: 1}]]
+          ]
+        ]
+      ]
+    ]
+  ]
+]
 ```
 
 **Key observation**: The closure references itself in its `[:Env | fact_binding]` section. This is a self-referential cycle, which is also fully supported.
@@ -857,7 +891,7 @@ Cycles in the binding graph are handled naturally because:
 Any pattern with an identifier can be referenced elsewhere:
 
 ```gram
-x:[:Number {value: 42}]
+[ x:Number {value: 42} ]
 
 [:List | x, x, x]  ; References x three times
 ```
@@ -900,9 +934,9 @@ Recommended structure:
 [:Environment |
   ; Bindings ordered by complexity (simple values first)
   ; Optional - omit if empty
-  b1:[:Binding {name: "threshold"} | [:Number {value: 50}]],
-  b2:[:Binding {name: "config"} | [:Record | ...]],
-  b3:[:Binding {name: "helper"} | [:Closure | ...]]
+  [ b1:Binding {name: "threshold"} | [:Number {value: 50}] ],
+  [ b2:Binding {name: "config"} | [:Record | ...] ],
+  [ b3:Binding {name: "helper"} | [:Closure | ...] ]
 ]
 
 ; Top-level expressions (whitespace delimited)
@@ -1031,7 +1065,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env |],
+  [:Env],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1058,7 +1092,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  m:[:Binding {name: "multiplier"} |
+  [ m:Binding {name: "multiplier"} |
     [:Number {value: 10}]
   ]
 ]
@@ -1093,7 +1127,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Environment |
-  cfg:[:Binding {name: "config"} |
+  [ cfg:Binding {name: "config"} |
     [:Record {threshold: 50, rate: 0.08}]
   ]
 ]
@@ -1143,7 +1177,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env |],
+  [:Env],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1181,7 +1215,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env |],
+  [:Env],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1223,7 +1257,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env |],
+  [:Env],
   [:Lambda |
     [:Parameters | state],
     [:Body |

@@ -53,6 +53,7 @@ module PatternLisp.Codec
   , subjectToBinding
   , patternSubjectToExpr
   -- Gram serialization functions (Phase 5)
+  , valueToSubjectForGram
   , valueToPatternSubjectForGram
   , patternSubjectToValue
   , programToGram
@@ -348,9 +349,13 @@ subjectToValue subj
         Just (SubjectValue.VInteger n) -> Right $ VNumber n
         _ -> Left $ TypeMismatch "Number Subject missing value property" (VList [])
   | "String" `Set.member` labels subj =
-      case Map.lookup "text" (properties subj) of
+      -- Support both "value" (Gram serialization) and "text" (legacy property storage)
+      case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VString s) -> Right $ VString (T.pack s)
-        _ -> Left $ TypeMismatch "String Subject missing text property" (VList [])
+        Nothing -> case Map.lookup "text" (properties subj) of
+          Just (SubjectValue.VString s) -> Right $ VString (T.pack s)
+          _ -> Left $ TypeMismatch "String Subject missing value or text property" (VList [])
+        _ -> Left $ TypeMismatch "String Subject missing value or text property" (VList [])
   | "Bool" `Set.member` labels subj =
       case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VBoolean b) -> Right $ VBool b
@@ -433,38 +438,54 @@ subjectToBinding subj
 -- * Recursive closure support via forward references
 -- * Standard library filtering
 
--- | Converts a Value to Pattern Subject for Gram serialization.
--- This follows the design in docs/plisp-serialization-design.md
--- This is a pure function for serialization (unlike PatternPrimitives.valueToPatternSubject which is monadic)
-valueToPatternSubjectForGram :: Value -> Pattern Subject
-valueToPatternSubjectForGram (VNumber n) = pattern $ Subject
+-- | Converts a Value to Subject decoration for Gram serialization.
+-- This extracts just the Subject decoration (not the full Pattern).
+-- For runtime pattern operations that need to create pattern decorations.
+valueToSubjectForGram :: Value -> Subject
+valueToSubjectForGram (VNumber n) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Number"]
   , properties = Map.fromList [("value", SubjectValue.VInteger n)]
   }
-valueToPatternSubjectForGram (VString s) = pattern $ Subject
+valueToSubjectForGram (VString s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
   , properties = Map.fromList [("value", SubjectValue.VString (T.unpack s))]
   }
-valueToPatternSubjectForGram (VBool b) = pattern $ Subject
+valueToSubjectForGram (VBool b) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
   }
-valueToPatternSubjectForGram (VList vs) = patternWith
-  (Subject
-    { identity = SubjectCore.Symbol ""
-    , labels = Set.fromList ["List"]
-    , properties = Map.empty
-    })
-  (map valueToPatternSubjectForGram vs)
-valueToPatternSubjectForGram (VPattern pat) = pat
-valueToPatternSubjectForGram (VPrimitive prim) = pattern $ Subject
+valueToSubjectForGram (VList _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["List"]
+  , properties = Map.empty
+  }
+valueToSubjectForGram (VPattern pat) = PatternCore.value pat
+valueToSubjectForGram (VPrimitive prim) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Primitive"]
   , properties = Map.fromList [("name", SubjectValue.VString (primitiveName prim))]
   }
+valueToSubjectForGram (VClosure _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Closure"]
+  , properties = Map.empty
+  }
+
+-- | Converts a Value to Pattern Subject for Gram serialization.
+-- This follows the design in docs/plisp-serialization-design.md
+-- This is a pure function for serialization (unlike PatternPrimitives.valueToPatternSubject which is monadic)
+valueToPatternSubjectForGram :: Value -> Pattern Subject
+valueToPatternSubjectForGram (VNumber n) = pattern $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGram (VString s) = pattern $ valueToSubjectForGram (VString s)
+valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGram (VList vs) = patternWith
+  (valueToSubjectForGram (VList []))
+  (map valueToPatternSubjectForGram vs)
+valueToPatternSubjectForGram (VPattern pat) = pat
+valueToPatternSubjectForGram (VPrimitive prim) = pattern $ valueToSubjectForGram (VPrimitive prim)
 valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
 
 -- | Converts a Pattern Subject back to a Value.
@@ -502,7 +523,11 @@ patternSubjectToValue pat = do
     ["Closure"] -> do
       closure <- patternSubjectToClosure pat
       Right $ VClosure closure
-    _ -> Left $ TypeMismatch ("Unknown pattern label: " ++ show (Set.toList (labels subj))) (VList [])
+    _ -> 
+      -- Generic pattern: if it doesn't match any specific value type,
+      -- it's already a Pattern, so return it as VPattern
+      -- This handles patterns that are patterns (like VPattern values)
+      Right $ VPattern pat
 
 -- | Pure version of exprToPatternSubject for use in Codec (avoids circular dependency)
 -- Handles special forms with explicit labels: :If, :Let, :Begin, :Define, :Quote
