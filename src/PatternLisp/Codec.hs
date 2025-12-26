@@ -73,6 +73,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.List (nubBy)
 import Data.Maybe (mapMaybe)
+import Control.Monad.State (State, runState, get, modify)
 import Gram.Serialize (toGram)
 import Gram.Parse (fromGram)
 
@@ -515,6 +516,33 @@ valueToPatternSubjectForGram (VPattern pat) =
 valueToPatternSubjectForGram (VPrimitive prim) = pattern $ valueToSubjectForGram (VPrimitive prim)
 valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
 
+-- | Internal version that uses State monad for scope ID generation
+-- This allows nested closures to share the same counter for unique IDs
+valueToPatternSubjectForGramWithState :: Value -> ScopeIdState (Pattern Subject)
+valueToPatternSubjectForGramWithState (VNumber n) = return $ pattern $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGramWithState (VString s) = return $ pattern $ valueToSubjectForGram (VString s)
+valueToPatternSubjectForGramWithState (VBool b) = return $ pattern $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGramWithState (VList vs) = do
+  elementPatterns <- mapM valueToPatternSubjectForGramWithState vs
+  return $ patternWith
+    (Subject
+      { identity = SubjectCore.Symbol ""
+      , labels = Set.fromList ["List"]
+      , properties = Map.empty
+      })
+    elementPatterns
+valueToPatternSubjectForGramWithState (VPattern pat) = 
+  -- VPattern wraps a Pattern Subject - we need to wrap it with :Pattern label
+  return $ patternWith
+    (Subject
+      { identity = SubjectCore.Symbol ""
+      , labels = Set.fromList ["Pattern"]
+      , properties = Map.empty
+      })
+    [pat]
+valueToPatternSubjectForGramWithState (VClosure closure) = closureToPatternSubjectWithState closure
+valueToPatternSubjectForGramWithState (VPrimitive prim) = return $ pattern $ valueToSubjectForGram (VPrimitive prim)
+
 -- | Converts a Pattern Subject back to a Value.
 -- This is the inverse of valueToPatternSubject.
 patternSubjectToValue :: Pattern Subject -> Either Error Value
@@ -795,14 +823,26 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
         let subject = exprToSubject expr'
         in pattern subject
 
+-- | State for tracking scope ID generation
+type ScopeIdState = State Int
+
+-- | Generate next unique scope ID (e1, e2, e3, ...)
+nextScopeId :: ScopeIdState SubjectCore.Symbol
+nextScopeId = do
+  counter <- get
+  modify (+1)
+  return $ SubjectCore.Symbol ("e" ++ show counter)
+
 -- | Converts a Closure to Pattern Subject using inline :Scope pattern format:
 -- [:Closure | [e1:Scope | e0, [bindings...]], [:Lambda | [:Parameters | ...], [:Body | ...]]]
 -- 
 -- The :Scope pattern is inlined with:
 -- - Parent scope reference (identifier or empty pattern for program-level)
 -- - Binding patterns directly in the :Scope pattern
-closureToPatternSubject :: Closure -> Pattern Subject
-closureToPatternSubject (Closure paramNames bodyExpr capturedEnv) =
+-- 
+-- Uses State monad to generate unique scope IDs
+closureToPatternSubjectWithState :: Closure -> ScopeIdState (Pattern Subject)
+closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
   -- Collect and process bindings from captured environment
   let bindingInfos = collectBindings initialEnv capturedEnv
       -- Create a map from binding names to identifiers for body transformation
@@ -844,24 +884,24 @@ closureToPatternSubject (Closure paramNames bodyExpr capturedEnv) =
         , labels = Set.empty
         , properties = Map.empty
         }
-      -- Create binding patterns directly in the :Scope pattern
-      bindingPatterns = map (\bi -> 
-        patternWith
-          (Subject
-            { identity = bindingIdentifier bi
-            , labels = Set.fromList ["Binding"]
-            , properties = Map.fromList [("name", SubjectValue.VString (bindingName bi))]
-            })
-          [valueToPatternSubjectForGram (bindingValue bi)]
-        ) bindingInfos
-      -- Build :Scope pattern elements: [parent_ref, binding1, binding2, ...]
-      -- Always include parent reference (even if empty for program-level)
-      scopeElements = parentScopeRef : bindingPatterns
-      -- Assign globally unique identifier to this scope pattern
-      -- For now, use a simple scheme (e1, e2, ...) - will need proper tracking later
-      -- TODO: Generate unique scope IDs based on scope depth or closure structure
-      scopeId = SubjectCore.Symbol "e1"  -- TODO: Generate unique scope IDs
-      scopePattern = patternWith
+  -- Create binding patterns directly in the :Scope pattern
+  -- Note: Serializing binding values may create nested closures, which also need scope IDs
+  bindingPatterns <- mapM (\bi -> do
+    valuePat <- valueToPatternSubjectForGramWithState (bindingValue bi)
+    return $ patternWith
+      (Subject
+        { identity = bindingIdentifier bi
+        , labels = Set.fromList ["Binding"]
+        , properties = Map.fromList [("name", SubjectValue.VString (bindingName bi))]
+        })
+      [valuePat]
+    ) bindingInfos
+  -- Build :Scope pattern elements: [parent_ref, binding1, binding2, ...]
+  -- Always include parent reference (even if empty for program-level)
+  let scopeElements = parentScopeRef : bindingPatterns
+  -- Generate unique scope ID
+  scopeId <- nextScopeId
+  let scopePattern = patternWith
         (Subject
           { identity = scopeId
           , labels = Set.fromList ["Scope"]
@@ -876,13 +916,20 @@ closureToPatternSubject (Closure paramNames bodyExpr capturedEnv) =
           , properties = Map.empty
           })
         [paramsPattern, bodyPattern]
-  in patternWith
+  return $ patternWith
     (Subject
       { identity = SubjectCore.Symbol ""
       , labels = Set.fromList ["Closure"]
       , properties = Map.empty
       })
     [scopePattern, lambdaPattern]
+
+-- | Wrapper that uses State monad to generate unique scope IDs
+closureToPatternSubject :: Closure -> Pattern Subject
+closureToPatternSubject closure = 
+  -- Use State monad to generate unique scope IDs, starting from counter 1
+  let (result, _) = runState (closureToPatternSubjectWithState closure) 1
+  in result
 
 -- | Extracts parent scope reference and bindings from inline :Scope pattern
 -- Format: [e1:Scope | parent_ref, [binding1...], [binding2...], ...]

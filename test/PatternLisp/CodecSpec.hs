@@ -91,7 +91,15 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
             result <- runRoundTripValue val
             if result then return () else fail "Round-trip failed: values not equal"
     
-    it "round-trip closure with captured environment" $ pendingWith "Environment serialization not yet implemented"
+    it "round-trip closure with captured environment" $ do
+      -- Create a closure that captures a variable from outer scope: (let ((x 10)) (lambda (y) (+ x y)))
+      case parseExpr "(let ((x 10)) (lambda (y) (+ x y)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            result <- runRoundTripValue val
+            if result then return () else fail "Round-trip failed: values not equal"
     
     it "round-trip nested closures" $ do
       -- Create nested closures: (lambda (x) (lambda (y) (+ x y)))
