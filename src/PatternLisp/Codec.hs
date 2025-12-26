@@ -546,7 +546,11 @@ valueToPatternSubjectForGramWithState (VPrimitive prim) = return $ pattern $ val
 -- | Converts a Pattern Subject back to a Value.
 -- This is the inverse of valueToPatternSubject.
 patternSubjectToValue :: Pattern Subject -> Either Error Value
-patternSubjectToValue pat = do
+patternSubjectToValue = patternSubjectToValueWithScopeMap Map.empty Set.empty
+
+-- | Converts a Pattern Subject back to a Value, with optional scope map and resolving scopes for nested closures
+patternSubjectToValueWithScopeMap :: Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Pattern Subject -> Either Error Value
+patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
   let subj = PatternCore.value pat
   case Set.toList (labels subj) of
     ["Number"] -> do
@@ -570,7 +574,7 @@ patternSubjectToValue pat = do
       Right $ VBool val
     ["List"] -> do
       let elements = PatternCore.elements pat
-      vals <- mapM patternSubjectToValue elements
+      vals <- mapM (patternSubjectToValueWithScopeMap scopeMap resolvingScopes) elements
       Right $ VList vals
     ["Primitive"] -> do
       name <- case Map.lookup "name" (properties subj) of
@@ -580,7 +584,7 @@ patternSubjectToValue pat = do
         Just prim -> Right $ VPrimitive prim
         Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VList [])
     ["Closure"] -> do
-      closure <- patternSubjectToClosure pat
+      closure <- patternSubjectToClosure pat scopeMap resolvingScopes
       Right $ VClosure closure
     ["Pattern"] -> do
       -- This is a VPattern value: [:Pattern | innerPattern]
@@ -876,18 +880,48 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
       --   - Identifier reference (e0) for shared parent scopes
       --   - Inlined parent scope pattern for nested closures (round-trip support)
       -- 
-      -- For round-trip: If any captured bindings are closures, we can inline their scopes
-      -- as parent scopes. For now, we use empty parent (program-level).
-      -- TODO: Detect nested closures and inline their scopes as parents
+      -- For nested closures: When a closure captures another closure, the captured closure's
+      -- scope should reference the capturing closure's scope as its parent to preserve
+      -- the lexical scope hierarchy.
       parentScopeRef = pattern $ Subject
         { identity = SubjectCore.Symbol ""  -- Empty identity = program-level
         , labels = Set.empty
         , properties = Map.empty
         }
+  -- Generate unique scope ID for this closure's scope (needed for nested closure parent references)
+  scopeId <- nextScopeId
   -- Create binding patterns directly in the :Scope pattern
   -- Note: Serializing binding values may create nested closures, which also need scope IDs
+  -- If a binding value is a closure, its scope should reference this closure's scope as parent
   bindingPatterns <- mapM (\bi -> do
-    valuePat <- valueToPatternSubjectForGramWithState (bindingValue bi)
+    valuePat <- case bindingValue bi of
+      VClosure nestedClosure -> do
+        -- This is a nested closure - serialize it first
+        nestedClosurePat <- closureToPatternSubjectWithState nestedClosure
+        -- Extract the nested closure's scope pattern and update its parent reference
+        let nestedElements = PatternCore.elements nestedClosurePat
+        case nestedElements of
+          [] -> return nestedClosurePat  -- Shouldn't happen, but handle gracefully
+          (nestedScopePat : restNestedElements) -> do
+            let nestedScopeSubj = PatternCore.value nestedScopePat
+                nestedScopeElements = PatternCore.elements nestedScopePat
+            -- Replace the nested scope's parent reference with this scope's ID
+            -- Format: [e2:Scope | e1, ...] where e1 is this scope's ID
+            case nestedScopeElements of
+              [] -> return nestedClosurePat  -- Shouldn't happen
+              (_oldParentRef : nestedBindings) -> do
+                let newParentRef = pattern $ Subject
+                      { identity = scopeId  -- Reference to this closure's scope
+                      , labels = Set.empty
+                      , properties = Map.empty
+                      }
+                    newNestedScopeElements = newParentRef : nestedBindings
+                    newNestedScopePat = patternWith nestedScopeSubj newNestedScopeElements
+                    newNestedElements = newNestedScopePat : restNestedElements
+                return $ patternWith (PatternCore.value nestedClosurePat) newNestedElements
+      _ -> do
+        -- Not a closure - serialize normally
+        valueToPatternSubjectForGramWithState (bindingValue bi)
     return $ patternWith
       (Subject
         { identity = bindingIdentifier bi
@@ -899,9 +933,7 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
   -- Build :Scope pattern elements: [parent_ref, binding1, binding2, ...]
   -- Always include parent reference (even if empty for program-level)
   let scopeElements = parentScopeRef : bindingPatterns
-  -- Generate unique scope ID
-  scopeId <- nextScopeId
-  let scopePattern = patternWith
+      scopePattern = patternWith
         (Subject
           { identity = scopeId
           , labels = Set.fromList ["Scope"]
@@ -962,8 +994,8 @@ extractScopeStructure scopePat = do
     else Left $ TypeMismatch "Expected Scope pattern" (VList [])
 
 -- | Extracts binding from a Binding pattern
-extractBindingFromPattern :: Pattern Subject -> Either Error (String, Value)
-extractBindingFromPattern bindingPat = do
+extractBindingFromPattern :: Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Pattern Subject -> Either Error (String, Value)
+extractBindingFromPattern scopeMap resolvingScopes bindingPat = do
   let bindingSubj = PatternCore.value bindingPat
   if "Binding" `Set.member` labels bindingSubj
     then do
@@ -975,7 +1007,7 @@ extractBindingFromPattern bindingPat = do
       let bindingElements = PatternCore.elements bindingPat
       case bindingElements of
         [valuePat] -> do
-          value <- patternSubjectToValue valuePat
+          value <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat
           Right (name, value)
         _ -> Left $ TypeMismatch "Binding pattern must have exactly one element (the value)" (VList [])
     else Left $ TypeMismatch "Expected Binding pattern" (VList [])
@@ -983,29 +1015,44 @@ extractBindingFromPattern bindingPat = do
 -- | Resolves bindings from a scope pattern by following parent chain
 -- For round-trip tests, we need to resolve parent scopes from the serialized structure
 -- This is a helper that extracts all bindings from a :Scope pattern and its parents
-resolveScopeBindings :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject) -> Either Error [(String, Value)]
-resolveScopeBindings scopePat scopeMap = do
-  (parentScopeRef, bindingPatterns) <- extractScopeStructure scopePat
-  -- Extract direct bindings
-  directBindings <- mapM extractBindingFromPattern bindingPatterns
-  -- Resolve parent bindings recursively
-  parentBindings <- case parentScopeRef of
-    Nothing -> Right []  -- Program-level, no parent
-    Just (Right parentScopePat) -> do
-      -- Inlined parent scope pattern - resolve it directly
-      resolveScopeBindings parentScopePat scopeMap
-    Just (Left parentId) -> do
-      -- Identifier reference - lookup parent scope in map
-      case Map.lookup parentId scopeMap of
-        Just parentScopePat -> resolveScopeBindings parentScopePat scopeMap
-        Nothing -> Left $ TypeMismatch ("Parent scope not found: " ++ show parentId) (VList [])
-  -- Merge: parent bindings first, then direct (direct shadows parent)
-  -- Use Map.fromList with later values overriding earlier ones
-  let allBindings = Map.toList $ Map.fromList (parentBindings ++ directBindings)
-  Right allBindings
+-- Takes a set of scope IDs currently being resolved to detect cycles
+resolveScopeBindings :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Either Error [(String, Value)]
+resolveScopeBindings scopePat scopeMap resolvingScopes = do
+  let scopeSubj = PatternCore.value scopePat
+      scopeId = identity scopeSubj
+  -- Check for cycles: if we're already resolving this exact scope, return empty to break recursion
+  -- This prevents infinite loops when a scope references itself (directly or indirectly)
+  if scopeId /= SubjectCore.Symbol "" && scopeId `Set.member` resolvingScopes
+    then Right []  -- Cycle detected - we're already resolving this scope, return empty to break recursion
+    else do
+      let newResolvingScopes = if scopeId /= SubjectCore.Symbol ""
+            then Set.insert scopeId resolvingScopes
+            else resolvingScopes
+      (parentScopeRef, bindingPatterns) <- extractScopeStructure scopePat
+      -- Resolve parent bindings FIRST, before extracting direct bindings
+      -- This ensures parent bindings are available when extracting nested closures that reference them
+      parentBindings <- case parentScopeRef of
+        Nothing -> Right []  -- Program-level, no parent
+        Just (Right parentScopePat) -> do
+          -- Inlined parent scope pattern - resolve it directly
+          resolveScopeBindings parentScopePat scopeMap newResolvingScopes
+        Just (Left parentId) -> do
+          -- Identifier reference - lookup parent scope in map
+          case Map.lookup parentId scopeMap of
+            Just parentScopePat -> resolveScopeBindings parentScopePat scopeMap newResolvingScopes
+            Nothing -> Left $ TypeMismatch ("Parent scope not found: " ++ show parentId) (VList [])
+      -- Extract direct bindings AFTER resolving parent bindings
+      -- This allows nested closures to use parent bindings that are already resolved
+      -- Pass parent bindings in scope map so nested closures can access them
+      directBindings <- mapM (extractBindingFromPattern scopeMap newResolvingScopes) bindingPatterns
+      -- Merge: parent bindings first, then direct (direct shadows parent)
+      -- Use Map.fromList with later values overriding earlier ones
+      let allBindings = Map.toList $ Map.fromList (parentBindings ++ directBindings)
+      Right allBindings
 
 -- | Builds a map of scope identifiers to scope patterns from a closure pattern
 -- This extracts all :Scope patterns that are referenced (for parent resolution)
+-- Recursively collects scopes from nested closures
 buildScopeMap :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject)
 buildScopeMap pat = 
   let subj = PatternCore.value pat
@@ -1039,8 +1086,9 @@ buildScopeMap pat =
 -- Extracts inline :Scope pattern: [e1:Scope | parent_ref, [bindings...]]
 -- Then extracts [:Lambda | [:Parameters | ...], [:Body | ...]] structure
 -- Resolves parent scope chain for round-trip support
-patternSubjectToClosure :: Pattern Subject -> Either Error Closure
-patternSubjectToClosure pat = do
+-- Takes an optional outer scope map and resolving scopes to resolve parent references in nested closures
+patternSubjectToClosure :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Either Error Closure
+patternSubjectToClosure pat outerScopeMap resolvingScopes = do
   let subj = PatternCore.value pat
   if "Closure" `Set.member` labels subj
     then do
@@ -1052,9 +1100,17 @@ patternSubjectToClosure pat = do
           let scopePat = elements !! 0
               lambdaPat = elements !! 1
           -- Build scope map from this closure and any nested closures
-          let scopeMap = buildScopeMap pat
+          -- Merge with outer scope map to resolve parent references
+          let localScopeMap = buildScopeMap pat
+              scopeMap = Map.union localScopeMap outerScopeMap
+              scopeSubj = PatternCore.value scopePat
+              scopeId = identity scopeSubj
+              -- Add this scope to resolving set to detect cycles
+              newResolvingScopes = if scopeId /= SubjectCore.Symbol ""
+                then Set.insert scopeId resolvingScopes
+                else resolvingScopes
           -- Resolve all bindings (including from parent chain)
-          allBindings <- resolveScopeBindings scopePat scopeMap
+          allBindings <- resolveScopeBindings scopePat scopeMap newResolvingScopes
           -- Build captured environment: merge with standard library
           let capturedEnv = Map.union (Map.fromList allBindings) initialEnv
           -- Extract lambda structure
@@ -1111,29 +1167,61 @@ extractParamName pat = do
     else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VList [])
 
 -- | Serializes a program (list of values) to Gram notation with file-level structure.
--- TODO: Implement file-level property records, expressions
+-- Format:
+--   { kind: "Pattern Lisp" }
+--   expr1
+--   expr2
+--   ...
+-- Note: No separate Environment section - scopes are inlined in :Scope patterns
 programToGram :: [Value] -> Env -> String
 programToGram values _runtimeEnv = 
-  -- For now, serialize each value separately
-  -- Full implementation will:
-  -- 1. Create file-level property record {kind: "Pattern Lisp", ...}
-  -- 2. Serialize expressions as patterns in file sequence
-  -- Note: No separate Environment section - scopes are inlined in :Scope patterns
-  unlines $ map (\v -> toGram (valueToPatternSubjectForGram v)) values
+  -- Create file-level property record pattern
+  let fileMetadata = patternWith
+        (Subject
+          { identity = SubjectCore.Symbol ""
+          , labels = Set.empty
+          , properties = Map.fromList [("kind", SubjectValue.VString "Pattern Lisp")]
+          })
+        []
+      -- Serialize each value as a pattern
+      valuePatterns = map valueToPatternSubjectForGram values
+      -- Combine file metadata with value patterns
+      -- Gram files are sequences of patterns, so we serialize them separately
+      metadataGram = toGram fileMetadata
+      valueGrams = map toGram valuePatterns
+  in unlines (metadataGram : valueGrams)
 
 -- | Deserializes Gram notation to a program (list of values and environment).
--- TODO: Implement file-level parsing, expressions parsing
+-- Expects format:
+--   { kind: "Pattern Lisp" }
+--   expr1
+--   expr2
+--   ...
+-- Note: No separate Environment section - scopes are inlined in :Scope patterns
 gramToProgram :: String -> Either Error ([Value], Env)
 gramToProgram gramText = do
-  -- For now, parse as single pattern
-  -- Full implementation will:
-  -- 1. Parse file-level property record
-  -- 2. Parse remaining patterns as expressions
-  -- 3. Merge environment with standard library
-  -- Note: No separate Environment section - scopes are inlined in :Scope patterns
-  pat <- case fromGram gramText of
-    Left parseErr -> Left $ ParseError (show parseErr)
-    Right p -> Right p
-  val <- patternSubjectToValue pat
-  Right ([val], initialEnv)
+  -- Split by lines and parse each pattern
+  let lines' = filter (not . null) $ map (dropWhile (== ' ')) $ lines gramText
+  case lines' of
+    [] -> Left $ TypeMismatch "Empty Gram file" (VList [])
+    (metadataLine : valueLines) -> do
+      -- Parse first pattern as file metadata
+      metadataPat <- case fromGram metadataLine of
+        Left parseErr -> Left $ ParseError (show parseErr)
+        Right p -> Right p
+      -- Verify it's the file metadata (has kind property)
+      let metadataSubj = PatternCore.value metadataPat
+          kindProp = Map.lookup "kind" (properties metadataSubj)
+      case kindProp of
+        Just (SubjectValue.VString "Pattern Lisp") -> do
+          -- Parse remaining patterns as expressions
+          valuePatterns <- mapM (\line -> case fromGram line of
+            Left parseErr -> Left $ ParseError (show parseErr)
+            Right p -> Right p
+            ) valueLines
+          -- Convert each pattern to a value
+          values <- mapM patternSubjectToValue valuePatterns
+          -- Return values with standard library environment
+          Right (values, initialEnv)
+        _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VList [])
 

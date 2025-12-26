@@ -7,7 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Gram
 import PatternLisp.PatternPrimitives
-import PatternLisp.Codec (patternSubjectToValue, valueToPatternSubjectForGram)
+import PatternLisp.Codec (patternSubjectToValue, valueToPatternSubjectForGram, programToGram, gramToProgram)
 import Pattern (Pattern)
 import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore
@@ -344,11 +344,50 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "File-level serialization" $ do
     it "program with file-level metadata round-trips" $ do
       -- Test that programToGram and gramToProgram work for file-level serialization
-      -- This will serialize multiple values with file-level property record
-      let values = [VNumber 42]
+      let values = [VNumber 42, VString (T.pack "hello"), VBool True]
       let env = initialEnv
-      -- This will be implemented in Codec.hs
-      pendingWith "Implement programToGram and gramToProgram"
+      -- Serialize to Gram
+      let gramText = programToGram values env
+      -- Deserialize from Gram
+      case gramToProgram gramText of
+        Left err -> fail $ "Deserialization error: " ++ show err
+        Right (values', env') -> do
+          -- Values should match
+          values `shouldBe` values'
+          -- Environment should be standard library
+          env' `shouldBe` initialEnv
+    
+    it "program with closures round-trips" $ do
+      -- Test that programs with closures serialize and deserialize correctly
+      case parseExpr "(lambda (x) (+ x 1))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err2 -> fail $ "Eval error: " ++ show err2
+          Right (VClosure closure) -> do
+            let values = [VNumber 42, VClosure closure, VString (T.pack "test")]
+            let env = initialEnv
+            -- Serialize to Gram
+            let gramText = programToGram values env
+            -- Deserialize from Gram
+            case gramToProgram gramText of
+              Left err3 -> fail $ "Deserialization error: " ++ show err3
+              Right (values', env') -> do
+                -- Values should match (using round-trip comparison for closures)
+                if length values == length values'
+                  then do
+                    -- Check each value
+                    let checkValue v1 v2 = case (v1, v2) of
+                          (VClosure c1, VClosure c2) -> do
+                            -- For closures, verify round-trip works
+                            result1 <- runRoundTripValue v1 initialEnv
+                            result2 <- runRoundTripValue v2 initialEnv
+                            if result1 && result2 then return () else fail "Closure round-trip failed"
+                          (v1', v2') -> if v1' == v2' then return () else fail $ "Value mismatch: " ++ show v1' ++ " != " ++ show v2'
+                    sequence_ $ zipWith checkValue values values'
+                    -- Environment should be standard library
+                    env' `shouldBe` initialEnv
+                  else fail $ "Value count mismatch: " ++ show (length values) ++ " != " ++ show (length values')
+          Right val -> fail $ "Expected VClosure, got: " ++ show val
   
   describe "Standard library filtering" $ do
     it "standard library bindings filtered from environment" $ do
