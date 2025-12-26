@@ -32,14 +32,14 @@ The current serialization design uses a flat `:Environment` section that doesn't
 - Makes scope hierarchy explicit in the pattern structure
 - Is consistent with Gram's pattern model (everything is a pattern)
 
-### Environment Structure
+### Scope Structure
 
-Each `:Env` pattern contains:
+Each `:Scope` pattern contains:
 - **Parent environment reference**: An identifier reference to the parent environment (or `[]` for program-level)
 - **Binding patterns**: `[ id:Binding {name: "..."} | value ]` patterns for bindings in this scope
 
 ```gram
-[e1:Env |
+[e1:Scope |
   e0,                              ; Parent environment (identifier reference)
   [ x_binding:Binding {name: "x"} |
     [:Number {value: 10}]
@@ -55,7 +55,7 @@ Each `:Env` pattern contains:
 The program-level environment has an empty parent (`[]`):
 
 ```gram
-[e0:Env |
+[e0:Scope |
   [],                              ; Empty parent = program-level (outermost scope)
   [ global_binding:Binding {name: "global"} |
     [:Number {value: 100}]
@@ -69,7 +69,7 @@ Closures inline their environment pattern as the first element:
 
 ```gram
 [:Closure |
-  [e1:Env |
+  [e1:Scope |
     e0,                            ; Parent environment reference
     [ x_binding:Binding {name: "x"} | ... ]
   ],
@@ -86,7 +86,7 @@ For closures at program level (no outer `let`), they reference the program-level
 
 ```gram
 [:Closure |
-  [e0:Env | []],                   ; Just program-level, no additional bindings
+  [e0:Scope | []],                   ; Just program-level, no additional bindings
   [:Lambda |
     [:Parameters | x],
     [:Body | ...]
@@ -97,7 +97,7 @@ For closures at program level (no outer `let`), they reference the program-level
 Or if they have program-level bindings:
 
 ```gram
-[e_program:Env |
+[e_program:Scope |
   [],
   [ config_binding:Binding {name: "config"} |
     [:Record {threshold: 50}]
@@ -105,7 +105,7 @@ Or if they have program-level bindings:
 ]
 
 [:Closure |
-  [e_tool:Env |
+  [e_tool:Scope |
     e_program,                     ; Reference to shared program environment
     []                             ; No additional bindings
   ],
@@ -131,8 +131,8 @@ Or if they have program-level bindings:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [e1:Env |
-    [e0:Env |
+  [e1:Scope |
+    [e0:Scope |
       [],                         ; Program-level (empty parent)
       [global_binding:Binding {name: "global"} |
         [:Number {value: 100}]
@@ -175,45 +175,35 @@ Or if they have program-level bindings:
   (lambda () x))                 ; Resolves to 10 (outer)
 ```
 
-**Serialized:**
+**Serialized (New Design - Inline Scopes):**
 ```gram
 { kind: "Pattern Lisp" }
 
-[:Environment |
-  [ x_program:Binding {name: "x"} |
-    [:Number {value: 1}]
-  ]
-]
-
-[:Environment |
-  [ x_program:Binding {name: "x"} |
-    [:Number {value: 1}]
-  ],
-  [ x_outer:Binding {name: "x"} |
-    [:Number {value: 10}]
-  ]
-]
-
 [:Closure |
-  [:Env |
-    x_outer,                        ; Reference to binding in :Environment
-    [:ParentEnv | program_env]     ; Inherit from program-level scope
+  [e1:Scope |
+    [e0:Scope |
+      [],                         ; Program-level (empty parent)
+      [x_program:Binding {name: "x"} |
+        [:Number {value: 1}]
+      ]
+    ],
+    [x_outer:Binding {name: "x"} |
+      [:Number {value: 10}]
+    ]
   ],
   [:Lambda |
     [:Parameters],
     [:Body |
-      x_outer                     ; Shadows x_program
+      x_outer                     ; Resolves to 10 (shadows program-level)
     ]
   ]
 ]
 ```
 
 **Deserialization:**
-1. Look up `x` in closure's `:Env` → find `x_outer` reference
-2. Resolve `x_outer` → lookup in `:Environment` → `10` ✅ (found, stops here)
-3. If not found, would check parent scope (program_env) → `x_program` → `1`
-4. Result: `x = 10` (outer shadows program-level)
-5. Note: Both `x_program` and `x_outer` are in `:Environment`, but shadowing is determined by which one is referenced in `:Env`
+1. Look up `x` in closure's `:Scope` → find `x_outer` binding → `10` ✅ (found, stops here)
+2. If not found, check parent scope `e0` → `x_program` → `1`
+3. Result: `x = 10` (outer shadows program-level)
 
 ---
 
@@ -232,8 +222,8 @@ Or if they have program-level bindings:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [e1:Env |
-    [e0:Env |
+  [e1:Scope |
+    [e0:Scope |
       [],                         ; Program-level
       [config_binding:Binding {name: "config"} |
         [:Record {threshold: 50}]
@@ -241,7 +231,7 @@ Or if they have program-level bindings:
     ],
     [helper_binding:Binding {name: "helper"} |
       [:Closure |
-        [e_helper:Env |
+        [e_helper:Scope |
           e0,                     ; Inherit from program-level
           []                      ; No additional bindings
         ],
@@ -294,8 +284,8 @@ Or if they have program-level bindings:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [e1:Env |
-    [e0:Env |
+  [e1:Scope |
+    [e0:Scope |
       [],                         ; Program-level
       [global_binding:Binding {name: "global"} |
         [:Number {value: 100}]
@@ -326,7 +316,7 @@ Or if they have program-level bindings:
 ]
 ```
 
-**Note**: All bindings at the same scope level (`x`, `y`, `z`) are in the same `:Env` pattern. They're all available to the closure.
+**Note**: All bindings at the same scope level (`x`, `y`, `z`) are in the same `:Scope` pattern. They're all available to the closure.
 
 ---
 
@@ -346,8 +336,8 @@ Or if they have program-level bindings:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [e1:Env |
-    [e0:Env |
+  [e1:Scope |
+    [e0:Scope |
       [],                         ; Program-level
       [x_program:Binding {name: "x"} |
         [:Number {value: 1}]
@@ -368,7 +358,7 @@ Or if they have program-level bindings:
         ],
         [:Body |
           [:Closure |
-            [e2:Env |
+            [e2:Scope |
               e1,                 ; Parent is e1 (level 1)
               [x_level2:Binding {name: "x"} |
                 [:Number {value: 20}]
@@ -412,7 +402,7 @@ Or if they have program-level bindings:
 ```gram
 { kind: "Pattern Lisp" }
 
-[e_program:Env |
+[e_program:Scope |
   [],
   [config_binding:Binding {name: "config"} |
     [:Record {threshold: 50}]
@@ -420,7 +410,7 @@ Or if they have program-level bindings:
 ]
 
 [:Closure |
-  [e_tool_a:Env |
+  [e_tool_a:Scope |
     e_program,                    ; Reference to shared program environment
     []                            ; No additional bindings
   ],
@@ -437,7 +427,7 @@ Or if they have program-level bindings:
 ]
 
 [:Closure |
-  [e_tool_b:Env |
+  [e_tool_b:Scope |
     e_program,                    ; Same shared parent
     []
   ],
@@ -460,17 +450,17 @@ Or if they have program-level bindings:
 
 ### Serialization
 
-1. **Inline environments**: Create `:Env` patterns inline at each scope level
-2. **Assign environment IDs**: Each `:Env` pattern gets a globally unique identifier
+1. **Inline environments**: Create `:Scope` patterns inline at each scope level
+2. **Assign environment IDs**: Each `:Scope` pattern gets a globally unique identifier
 3. **Reference parent**: Parent environment is referenced by identifier (or `[]` for program-level)
 4. **Deduplicate bindings**: Bindings are deduplicated separately (by name, value pairs)
 5. **Program-level**: Environment with empty parent `[]` is program-level
 
 ### Deserialization
 
-1. **Build environment tree**: Parse `:Env` patterns and build environment tree structure
+1. **Build environment tree**: Parse `:Scope` patterns and build environment tree structure
 2. **Resolve scope chain**: For each closure, resolve bindings by:
-   - Check bindings in closure's `:Env` pattern first
+   - Check bindings in closure's `:Scope` pattern first
    - If not found, check parent environment (follow identifier reference)
    - Continue up the chain until found or reach program-level
 3. **Handle shadowing**: First binding found wins (innermost shadows outer)
@@ -493,18 +483,18 @@ resolveBinding(name, env_pattern):
 ### Key Differences from Previous Approach
 
 1. **No separate `:Environment` section**: Environments are inline patterns
-2. **First-class environments**: `:Env` patterns are patterns with identifiers
+2. **First-class environments**: `:Scope` patterns are patterns with identifiers
 3. **Explicit nesting**: Scope hierarchy is visible in the pattern structure
 4. **Parent as identifier**: Parent is just an identifier reference, not special syntax
 
 ## Answers to Key Questions
 
-### Q1: What's the difference between `:Environment` and `:Env`?
+### Q1: What's the difference between `:Environment` and `:Scope`?
 
-**Answer**: There is no `:Environment` section in this approach! 
+**Answer**: There is no `:Environment` section in this approach! The old design used a separate `:Environment` section, but that has been eliminated. 
 
-- **`:Env`** patterns are **first-class patterns** that are **inlined** at each scope level
-- Each `:Env` pattern contains:
+- **`:Scope`** patterns are **first-class patterns** that are **inlined** at each scope level
+- Each `:Scope` pattern contains:
   - Parent environment reference (identifier or `[]`)
   - Binding patterns for bindings in this scope
 - Environments are nested via identifier references (e.g., `e1` references `e0`)
@@ -517,19 +507,19 @@ resolveBinding(name, env_pattern):
 - **Environments are nested** via identifier references
 - When a closure is nested inside another closure's body, the nesting is obvious from the structure
 - The **scope relationship** is explicit: parent environment is referenced by identifier
-- Example: `[e1:Env | e0, ...]` clearly shows `e1` inherits from `e0`
+- Example: `[e1:Scope | e0, ...]` clearly shows `e1` inherits from `e0`
 
 **Example**: 
 ```gram
 [:Closure |
-  [e1:Env |
+  [e1:Scope |
     e0,                           ; ← Parent relationship is explicit
     [x_binding:Binding | ...]
   ],
   [:Lambda |
     [:Body |
       [:Closure |                 ; ← Nesting is obvious from structure
-        [e2:Env |
+        [e2:Scope |
           e1,                      ; ← Parent relationship is explicit
           [y_binding:Binding | ...]
         ],
@@ -546,11 +536,11 @@ Both the structural nesting and the scope relationship are explicit and obvious.
 
 1. **Parent Reference Format**: ✅ **Resolved** - Parent is an identifier reference (or `[]` for program-level)
 2. **Program-Level Reference**: ✅ **Resolved** - Program-level is `e0:Env | []` (empty parent)
-3. **Empty Environments**: ✅ **Resolved** - Empty environments still reference parent (e.g., `[e1:Env | e0, []]`)
-4. **Environment IDs**: ✅ **Globally unique** - all pattern identifiers are globally unique
+3. **Empty Environments**: ✅ **Resolved** - Empty environments still reference parent (e.g., `[e1:Scope | e0, []]`)
+4. **Scope IDs**: ✅ **Globally unique** - all pattern identifiers are globally unique
 5. **Backward Compatibility**: ✅ **Never worry about backwards compatibility**
 6. **Binding Deduplication**: ✅ **Separate** - Bindings are deduplicated separately from environments
-7. **Environment Location**: ✅ **Inlined** - Environments are inlined at each scope level, no separate `:Environment` section
+7. **Scope Location**: ✅ **Inlined** - Scopes are inlined at each scope level, no separate `:Environment` section
 
 ## Next Steps
 

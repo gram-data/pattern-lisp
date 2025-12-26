@@ -280,7 +280,7 @@ Expressions are patterns in the file sequence (whitespace delimited):
 
 ```gram
 [:Closure |
-  [:Env | b1, b2],
+  [:Scope | b1, b2],
   [:Lambda |
     [:Parameters | x, y],
     [:Body |
@@ -295,7 +295,7 @@ Expressions are patterns in the file sequence (whitespace delimited):
 ```
 
 **Key properties**:
-- `[:Env | refs]` contains references to bindings in Environment section (captured bindings)
+- `[:Scope | refs]` contains references to bindings in Environment section (captured bindings)
 - `[:Lambda | ...]` contains the lambda definition
 - `[:Parameters | ...]` lists parameter names (function arguments)
 - `[:Body | expr]` contains the function body as a Pattern Subject
@@ -325,7 +325,7 @@ Serialized:
 ]
 
 [:Closure |
-  [:Env | b1],
+      [:Scope | b1],
   [:Lambda |
     [:Parameters | state],
     [:Body |
@@ -341,7 +341,7 @@ Serialized:
 
 **Key observations**:
 - `state` is a **parameter** (function argument) - listed in `[:Parameters | ...]` and referenced directly in the body
-- `b1` is a **bound value** (captured from environment) - referenced as an identifier in both `[:Env | ...]` and the body
+- `b1` is a **bound value** (captured from environment) - referenced as an identifier in both `[:Scope | ...]` and the body
 
 ## Parameters vs Bound Values
 
@@ -366,7 +366,7 @@ Bound values are captured from the lexical environment, referenced as **Gram ide
 
 ```gram
 [:Closure |
-  [:Env | b1, b2],
+  [:Scope | b1, b2],
   [:Lambda | ...]
 ]
 ```
@@ -386,7 +386,7 @@ Example showing both:
 ]
 
 [:Closure |
-  [:Env | b1],                  ; b1 is a bound value (identifier)
+      [:Scope | b1],                  ; b1 is a bound value (identifier)
   [:Lambda |
     [:Parameters | y],          ; y is a parameter
     [:Body |
@@ -430,7 +430,7 @@ Serialized:
 ]
 
 [:Closure |
-  [:Env | cfg],
+  [:Scope | cfg],
   [:Lambda |
     [:Parameters | state],
     [:Body | [:List | [:Symbol {name: "process-a"}], state, cfg]]
@@ -438,7 +438,7 @@ Serialized:
 ]
 
 [:Closure |
-  [:Env | cfg],
+  [:Scope | cfg],
   [:Lambda |
     [:Parameters | state],
     [:Body | [:List | [:Symbol {name: "process-b"}], state, cfg]]
@@ -484,7 +484,7 @@ Two bindings are considered equal if:
 
 Both closures capture `x` with value `10` from the same scope. These are the **same binding**, so:
 - One binding pattern is created: `[ x_1:Binding {name: "x"} | [:Number {value: 10}] ]`
-- Both closures reference `x_1` in their `[:Env | ...]` sections
+- Both closures reference `x_1` in their `[:Scope | ...]` sections
 
 **Example: Different scopes, same name and value**:
 ```scheme
@@ -555,7 +555,7 @@ Both closures capture `helper` with the same closure value. These are the **same
 [:Environment |
   [ helper_binding:Binding {name: "helper"} |
     [:Closure |
-      [:Env],
+      [:Scope],
       [:Lambda |
         [:Parameters | x],
         [:Body |
@@ -571,7 +571,7 @@ Both closures capture `helper` with the same closure value. These are the **same
 ]
 
 [:Closure |
-  [:Env | helper_binding],
+  [:Scope | helper_binding],
   [:Lambda |
     [:Parameters | y],
     [:Body |
@@ -749,7 +749,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 [:Environment |
   [ f_binding:Binding {name: "f"} |
     [:Closure |
-      [:Env | g_binding],
+      [:Scope | g_binding],
       [:Lambda |
         [:Parameters | x],
         [:Body |
@@ -767,7 +767,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
   ],
   [ g_binding:Binding {name: "g"} |
     [:Closure |
-      [:Env | f_binding],
+      [:Scope | f_binding],
       [:Lambda |
         [:Parameters | x],
         [:Body |
@@ -786,7 +786,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 ]
 
 [:Closure |
-  [:Env | g_binding],
+  [:Scope | g_binding],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -805,8 +805,8 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 
 **Key observations**:
 - Both `f` and `g` are closures, so they're bindings in the Environment section
-- `f_binding` references `g_binding` in its `[:Env | ...]` section (forward reference)
-- `g_binding` references `f_binding` in its `[:Env | ...]` section (forward reference)
+- `f_binding` references `g_binding` in its `[:Scope | ...]` section (forward reference)
+- `g_binding` references `f_binding` in its `[:Scope | ...]` section (forward reference)
 - This creates a cycle: `f_binding` → `g_binding` → `f_binding`
 - Forward references are valid in Gram, so this works
 - In the body, `f` and `g` are referenced as symbols which are resolved via the environment at runtime
@@ -829,7 +829,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 [:Environment |
   [ fact_binding:Binding {name: "fact"} |
     [:Closure |
-      [:Env | fact_binding],  ; Self-reference!
+      [:Scope | fact_binding],  ; Self-reference!
       [:Lambda |
         [:Parameters | n],
         [:Body |
@@ -852,7 +852,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 ]
 
 [:Closure |
-  [:Env | fact_binding],
+  [:Scope | fact_binding],
   [:Lambda |
     [:Parameters | n],
     [:Body |
@@ -873,7 +873,7 @@ Pattern Lisp fully supports recursive and mutually recursive closures. Cycles in
 ]
 ```
 
-**Key observation**: The closure references itself in its `[:Env | fact_binding]` section. This is a self-referential cycle, which is also fully supported.
+**Key observation**: The closure references itself in its `[:Scope | fact_binding]` section. This is a self-referential cycle, which is also fully supported.
 
 ### How Cycles Are Handled
 
@@ -1065,7 +1065,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env],
+  [:Scope],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1098,7 +1098,7 @@ Pattern Subject → Check Label:
 ]
 
 [:Closure |
-  [:Env | m],
+  [:Scope | m],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1133,7 +1133,7 @@ Pattern Subject → Check Label:
 ]
 
 [:Closure |
-  [:Env | cfg],
+  [:Scope | cfg],
   [:Lambda |
     [:Parameters | state],
     [:Body |
@@ -1147,7 +1147,7 @@ Pattern Subject → Check Label:
 ]
 
 [:Closure |
-  [:Env | cfg],
+  [:Scope | cfg],
   [:Lambda |
     [:Parameters | state],
     [:Body |
@@ -1177,7 +1177,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env],
+  [:Scope],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1215,7 +1215,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env],
+  [:Scope],
   [:Lambda |
     [:Parameters | x],
     [:Body |
@@ -1257,7 +1257,7 @@ Pattern Subject → Check Label:
 { kind: "Pattern Lisp" }
 
 [:Closure |
-  [:Env],
+  [:Scope],
   [:Lambda |
     [:Parameters | state],
     [:Body |

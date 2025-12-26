@@ -71,6 +71,8 @@ import qualified Subject.Value as SubjectValue
 import qualified Data.Text as T
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Data.List (nubBy)
+import Data.Maybe (mapMaybe)
 import Gram.Serialize (toGram)
 import Gram.Parse (fromGram)
 
@@ -134,54 +136,75 @@ extractStringFromValue _ = Left $ TypeMismatch "Expected VString in labels array
 
 -- | Converts a Pattern Subject back to expression AST.
 -- Handles special form labels: :If, :Let, :Begin, :Define, :Quote
+-- This is a wrapper that calls the version with bindings (empty map)
 patternSubjectToExpr :: Pattern Subject -> Either Error Expr
-patternSubjectToExpr pat = do
+patternSubjectToExpr = patternSubjectToExprWithBindings Map.empty
+
+-- | Converts a Pattern Subject back to expression AST, with support for identifier references
+-- Identifier references (patterns with empty labels and non-empty identity) are replaced
+-- with variable names from the binding map
+patternSubjectToExprWithBindings :: Map.Map SubjectCore.Symbol String -> Pattern Subject -> Either Error Expr
+patternSubjectToExprWithBindings bindingMap pat = do
   let subj = PatternCore.value pat
       lbls = labels subj
       elements = PatternCore.elements pat
-  if "If" `Set.member` lbls then do
-    -- If special form: [:If | cond, then, else] -> (if cond then else)
-    case elements of
-      [cond, thenExpr, elseExpr] -> do
-        condExpr <- patternSubjectToExpr cond
-        thenExpr' <- patternSubjectToExpr thenExpr
-        elseExpr' <- patternSubjectToExpr elseExpr
-        Right $ List [Atom (Symbol "if"), condExpr, thenExpr', elseExpr']
-      _ -> Left $ TypeMismatch "If pattern must have 3 elements" (VList [])
-  else if "Let" `Set.member` lbls then do
-    -- Let special form: [:Let | bindings, body] -> (let bindings body)
-    case elements of
-      [bindingsExpr, bodyExpr] -> do
-        bindings <- patternSubjectToExpr bindingsExpr
-        bodyExpr' <- patternSubjectToExpr bodyExpr
-        Right $ List [Atom (Symbol "let"), bindings, bodyExpr']
-      _ -> Left $ TypeMismatch "Let pattern must have 2 elements" (VList [])
-  else if "Begin" `Set.member` lbls then do
-    -- Begin special form: [:Begin | expr1, expr2, ...] -> (begin expr1 expr2 ...)
-    exprs <- mapM patternSubjectToExpr elements
-    Right $ List (Atom (Symbol "begin") : exprs)
-  else if "Define" `Set.member` lbls then do
-    -- Define special form: [:Define | name, value] -> (define name value)
-    case elements of
-      [nameExpr, valueExpr] -> do
-        name <- patternSubjectToExpr nameExpr
-        value <- patternSubjectToExpr valueExpr
-        Right $ List [Atom (Symbol "define"), name, value]
-      _ -> Left $ TypeMismatch "Define pattern must have 2 elements" (VList [])
-  else if "Quote" `Set.member` lbls then do
-    -- Quote special form: [:Quote | expr] -> (quote expr) or 'expr
-    case elements of
-      [exprPat] -> do
-        expr <- patternSubjectToExpr exprPat
-        Right $ Quote expr
-      _ -> Left $ TypeMismatch "Quote pattern must have 1 element" (VList [])
-  else if "List" `Set.member` lbls then do
-    -- List pattern: extract elements and convert recursively
-    exprs <- mapM patternSubjectToExpr elements
-    Right $ List exprs
-  else do
-    -- Atomic pattern: convert decoration Subject to Expr
-    subjectToExpr subj
+      -- Check if this is an identifier reference (empty labels, non-empty identity)
+      isIdentifierRef = Set.null lbls && identity subj /= SubjectCore.Symbol ""
+  if isIdentifierRef
+    then do
+      -- Identifier reference: look up in binding map to get variable name
+      case Map.lookup (identity subj) bindingMap of
+        Just varName -> Right $ Atom (Symbol varName)
+        Nothing -> Left $ TypeMismatch ("Unknown identifier reference: " ++ show (identity subj)) (VList [])
+    else if "If" `Set.member` lbls then do
+      -- If special form: [:If | cond, then, else] -> (if cond then else)
+      case elements of
+        [cond, thenExpr, elseExpr] -> do
+          condExpr <- patternSubjectToExprWithBindings bindingMap cond
+          thenExpr' <- patternSubjectToExprWithBindings bindingMap thenExpr
+          elseExpr' <- patternSubjectToExprWithBindings bindingMap elseExpr
+          Right $ List [Atom (Symbol "if"), condExpr, thenExpr', elseExpr']
+        _ -> Left $ TypeMismatch "If pattern must have 3 elements" (VList [])
+    else if "Let" `Set.member` lbls then do
+      -- Let special form: [:Let | bindings, body] -> (let bindings body)
+      case elements of
+        [bindingsExpr, bodyExpr] -> do
+          bindings <- patternSubjectToExprWithBindings bindingMap bindingsExpr
+          bodyExpr' <- patternSubjectToExprWithBindings bindingMap bodyExpr
+          Right $ List [Atom (Symbol "let"), bindings, bodyExpr']
+        _ -> Left $ TypeMismatch "Let pattern must have 2 elements" (VList [])
+    else if "Begin" `Set.member` lbls then do
+      -- Begin special form: [:Begin | expr1, expr2, ...] -> (begin expr1 expr2 ...)
+      exprs <- mapM (patternSubjectToExprWithBindings bindingMap) elements
+      Right $ List (Atom (Symbol "begin") : exprs)
+    else if "Define" `Set.member` lbls then do
+      -- Define special form: [:Define | name, value] -> (define name value)
+      case elements of
+        [nameExpr, valueExpr] -> do
+          name <- patternSubjectToExprWithBindings bindingMap nameExpr
+          value <- patternSubjectToExprWithBindings bindingMap valueExpr
+          Right $ List [Atom (Symbol "define"), name, value]
+        _ -> Left $ TypeMismatch "Define pattern must have 2 elements" (VList [])
+    else if "Quote" `Set.member` lbls then do
+      -- Quote special form: [:Quote | expr] -> (quote expr) or 'expr
+      case elements of
+        [exprPat] -> do
+          expr <- patternSubjectToExprWithBindings bindingMap exprPat
+          Right $ Quote expr
+        _ -> Left $ TypeMismatch "Quote pattern must have 1 element" (VList [])
+    else if "List" `Set.member` lbls then do
+      -- List pattern: extract elements and convert recursively
+      exprs <- mapM (patternSubjectToExprWithBindings bindingMap) elements
+      Right $ List exprs
+    else if "Symbol" `Set.member` lbls then do
+      -- Symbol pattern: extract name property (used for parameters)
+      case Map.lookup "name" (properties subj) of
+        Just (SubjectValue.VString name) -> Right $ Atom (Symbol name)
+        _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VList [])
+    else do
+      -- Atomic pattern: convert decoration Subject to Expr
+      -- Try subjectToExpr for other patterns (Var, Number, String, Bool, etc.)
+      subjectToExpr subj
 
 -- ============================================================================
 -- Secondary Path: Expression <-> Subject (for property storage)
@@ -325,7 +348,7 @@ valueToSubject (VPrimitive prim) = Subject
 envToSubject :: Env -> Subject
 envToSubject runtimeEnv = Subject
   { identity = SubjectCore.Symbol ""
-  , labels = Set.fromList ["Env"]
+  , labels = Set.fromList ["Scope"]
   , properties = Map.fromList [("bindings", SubjectValue.VArray (map (subjectToSubjectValue . bindingToSubject) (Map.toList runtimeEnv)))]
   }
   where
@@ -389,7 +412,7 @@ subjectToValue subj
 {-# WARNING subjectToEnv "Not currently used for Closure deserialization" #-}
 subjectToEnv :: Subject -> Either Error Env
 subjectToEnv subj
-  | "Env" `Set.member` labels subj = do
+  | "Scope" `Set.member` labels subj = do
       bindingsVal <- case Map.lookup "bindings" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
         _ -> Left $ TypeMismatch "Env Subject missing bindings property" (VList [])
@@ -429,9 +452,9 @@ subjectToBinding subj
 --
 -- Key design principles:
 -- * File-level property records for metadata
--- * Optional Environment section for shared bindings
+-- * Inline :Scope patterns for lexical scopes (no separate Environment section)
 -- * Expressions as patterns in file sequence
--- * Closure structure: [:Closure | [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]]]
+-- * Closure structure: [:Closure | [:Scope | ...], [:Lambda | [:Parameters | ...], [:Body | ...]]]
 -- * Special form labels: :If, :Let, :Begin, :Define, :Quote
 -- * Parameters vs bound values distinction
 -- * Binding deduplication by (name, value) pairs
@@ -618,13 +641,174 @@ exprToPatternSubjectPure expr =
       pat = pattern subject
   in pat
 
--- | Converts a Closure to Pattern Subject using the design format:
--- [:Closure | [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]]]
--- TODO: Implement binding collection, deduplication, and environment section
+-- | Binding information for serialization
+data BindingInfo = BindingInfo
+  { bindingName :: String
+  , bindingValue :: Value  -- Used for deduplication and creating binding patterns
+  , bindingIdentifier :: SubjectCore.Symbol  -- Gram identifier for this binding
+  }
+
+-- | Collect bindings from environment, filter standard library, deduplicate, and assign identifiers
+collectBindings :: Env -> Env -> [BindingInfo]
+collectBindings standardLib capturedEnv =
+  -- Extract bindings from captured environment
+  let bindings = Map.toList capturedEnv
+      -- Filter out standard library bindings
+      nonStandardBindings = filter (\(name, _) -> not (Map.member name standardLib)) bindings
+      -- Deduplicate by (name, value) pairs
+      uniqueBindings = nubBy (\(n1, v1) (n2, v2) -> n1 == n2 && valueEqual v1 v2) nonStandardBindings
+      -- Assign identifiers (variableName@1, variableName@2, ...)
+      -- Using @ as separator since it's less common in variable names than _
+      indexed = zip uniqueBindings [1..]
+  in map (\((name, val), idx) -> BindingInfo name val (SubjectCore.Symbol (name ++ "@" ++ show (idx :: Int)))) indexed
+  where
+    -- Value equality for deduplication (structural equality)
+    valueEqual :: Value -> Value -> Bool
+    valueEqual (VNumber n1) (VNumber n2) = n1 == n2
+    valueEqual (VString s1) (VString s2) = s1 == s2
+    valueEqual (VBool b1) (VBool b2) = b1 == b2
+    valueEqual (VList vs1) (VList vs2) = length vs1 == length vs2 && all (uncurry valueEqual) (zip vs1 vs2)
+    valueEqual (VPattern p1) (VPattern p2) = patternEqual p1 p2
+    valueEqual (VClosure c1) (VClosure c2) = closureEqual c1 c2
+    valueEqual (VPrimitive p1) (VPrimitive p2) = p1 == p2
+    valueEqual _ _ = False
+    
+    -- Pattern equality (by structure, ignoring identity)
+    patternEqual :: Pattern Subject -> Pattern Subject -> Bool
+    patternEqual p1 p2 =
+      let subj1 = PatternCore.value p1
+          subj2 = PatternCore.value p2
+      in labels subj1 == labels subj2 &&
+         properties subj1 == properties subj2 &&
+         length (PatternCore.elements p1) == length (PatternCore.elements p2) &&
+         all (uncurry patternEqual) (zip (PatternCore.elements p1) (PatternCore.elements p2))
+    
+    -- Closure equality (by code structure and captured environment)
+    closureEqual :: Closure -> Closure -> Bool
+    closureEqual (Closure params1 body1 env1) (Closure params2 body2 env2) =
+      params1 == params2 &&
+      body1 == body2 &&
+      -- Compare environments by (name, value) pairs
+      Map.toList env1 == Map.toList env2
+
+-- | Converts an expression to Pattern Subject, with special handling for identifier references
+-- Identifier references are patterns with just the identifier (no labels, identity = identifier)
+-- If bindingMap is empty, falls back to exprToPatternSubjectPure for efficiency
+exprToPatternSubjectWithBindings :: Expr -> Map.Map String SubjectCore.Symbol -> [String] -> Pattern Subject
+exprToPatternSubjectWithBindings expr bindingMap paramNames
+  | Map.null bindingMap = exprToPatternSubjectPure expr  -- No bindings to transform, use pure version
+  | otherwise = transformExprWithBindings expr bindingMap paramNames
+  where
+    transformExprWithBindings :: Expr -> Map.Map String SubjectCore.Symbol -> [String] -> Pattern Subject
+    transformExprWithBindings expr' bindingMap' paramNames' = case expr' of
+      -- Symbol: check if it's a bound variable or parameter
+      Atom (Symbol name) ->
+        if name `elem` paramNames'
+          then 
+            -- Parameter: create Symbol pattern
+            let subject = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["Symbol"]
+                  , properties = Map.fromList [("name", SubjectValue.VString name)]
+                  }
+            in pattern subject
+          else case Map.lookup name bindingMap' of
+            Just identifier ->
+              -- Bound variable: create identifier reference pattern
+              -- Identifier reference is a pattern with just the identifier (empty labels)
+              pattern $ Subject
+                { identity = identifier
+                , labels = Set.empty
+                , properties = Map.empty
+                }
+            Nothing ->
+              -- Regular symbol (not bound, not parameter): create Symbol pattern
+              let subject = Subject
+                    { identity = SubjectCore.Symbol ""
+                    , labels = Set.fromList ["Symbol"]
+                    , properties = Map.fromList [("name", SubjectValue.VString name)]
+                    }
+              in pattern subject
+      -- Lists: handle special forms and function calls
+      List exprs' ->
+        case exprs' of
+          (Atom (Symbol "if")):cond:thenExpr:elseExpr:[] ->
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["If"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [cond, thenExpr, elseExpr]
+            in patternWith decoration elementPatterns
+          (Atom (Symbol "let")):bindingsExpr:bodyExpr:[] ->
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["Let"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [bindingsExpr, bodyExpr]
+            in patternWith decoration elementPatterns
+          (Atom (Symbol "begin")):rest ->
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["Begin"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') rest
+            in patternWith decoration elementPatterns
+          (Atom (Symbol "define")):nameExpr:valueExpr:[] ->
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["Define"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [nameExpr, valueExpr]
+            in patternWith decoration elementPatterns
+          (Atom (Symbol "quote")):expr'':[] ->
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["Quote"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = [transformExprWithBindings expr'' bindingMap' paramNames']
+            in patternWith decoration elementPatterns
+          _ ->
+            -- Regular function call or list
+            let decoration = Subject
+                  { identity = SubjectCore.Symbol ""
+                  , labels = Set.fromList ["List"]
+                  , properties = Map.empty
+                  }
+                elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') exprs'
+            in patternWith decoration elementPatterns
+      -- Quote: transform the inner expression
+      Quote expr'' ->
+        let decoration = Subject
+              { identity = SubjectCore.Symbol ""
+              , labels = Set.fromList ["Quote"]
+              , properties = Map.empty
+              }
+            elementPatterns = [transformExprWithBindings expr'' bindingMap' paramNames']
+        in patternWith decoration elementPatterns
+      -- Other atoms: convert normally
+      _ ->
+        let subject = exprToSubject expr'
+        in pattern subject
+
+-- | Converts a Closure to Pattern Subject using inline :Scope pattern format:
+-- [:Closure | [e1:Scope | e0, [bindings...]], [:Lambda | [:Parameters | ...], [:Body | ...]]]
+-- 
+-- The :Scope pattern is inlined with:
+-- - Parent scope reference (identifier or empty pattern for program-level)
+-- - Binding patterns directly in the :Scope pattern
 closureToPatternSubject :: Closure -> Pattern Subject
-closureToPatternSubject (Closure paramNames bodyExpr _capturedEnv) =
-  -- Convert body expression to Pattern Subject
-  let bodyPattern = exprToPatternSubjectPure bodyExpr
+closureToPatternSubject (Closure paramNames bodyExpr capturedEnv) =
+  -- Collect and process bindings from captured environment
+  let bindingInfos = collectBindings initialEnv capturedEnv
+      -- Create a map from binding names to identifiers for body transformation
+      bindingMap = Map.fromList $ map (\bi -> (bindingName bi, bindingIdentifier bi)) bindingInfos
+      -- Convert body expression to Pattern Subject, replacing bound variables with identifier references
+      bodyPattern = exprToPatternSubjectWithBindings bodyExpr bindingMap paramNames
       -- Create parameters pattern with parameter names as elements
       -- Each parameter is a Symbol pattern
       paramPatterns = map (\name -> pattern $ Subject
@@ -645,12 +829,45 @@ closureToPatternSubject (Closure paramNames bodyExpr _capturedEnv) =
             , properties = Map.empty
             })
           paramPatterns
-      -- Create environment pattern (empty for now, will be populated with bindings)
-      envPattern = pattern $ Subject
-        { identity = SubjectCore.Symbol ""
-        , labels = Set.fromList ["Env"]
+      -- Create inline :Scope pattern with parent reference and binding patterns
+      -- Format: [e1:Scope | parent_ref, [binding1...], [binding2...], ...]
+      -- Parent reference can be:
+      --   - Empty pattern ([]) for program-level
+      --   - Identifier reference (e0) for shared parent scopes
+      --   - Inlined parent scope pattern for nested closures (round-trip support)
+      -- 
+      -- For round-trip: If any captured bindings are closures, we can inline their scopes
+      -- as parent scopes. For now, we use empty parent (program-level).
+      -- TODO: Detect nested closures and inline their scopes as parents
+      parentScopeRef = pattern $ Subject
+        { identity = SubjectCore.Symbol ""  -- Empty identity = program-level
+        , labels = Set.empty
         , properties = Map.empty
         }
+      -- Create binding patterns directly in the :Scope pattern
+      bindingPatterns = map (\bi -> 
+        patternWith
+          (Subject
+            { identity = bindingIdentifier bi
+            , labels = Set.fromList ["Binding"]
+            , properties = Map.fromList [("name", SubjectValue.VString (bindingName bi))]
+            })
+          [valueToPatternSubjectForGram (bindingValue bi)]
+        ) bindingInfos
+      -- Build :Scope pattern elements: [parent_ref, binding1, binding2, ...]
+      -- Always include parent reference (even if empty for program-level)
+      scopeElements = parentScopeRef : bindingPatterns
+      -- Assign globally unique identifier to this scope pattern
+      -- For now, use a simple scheme (e1, e2, ...) - will need proper tracking later
+      -- TODO: Generate unique scope IDs based on scope depth or closure structure
+      scopeId = SubjectCore.Symbol "e1"  -- TODO: Generate unique scope IDs
+      scopePattern = patternWith
+        (Subject
+          { identity = scopeId
+          , labels = Set.fromList ["Scope"]
+          , properties = Map.empty
+          })
+        scopeElements
       -- Create lambda pattern with parameters and body
       lambdaPattern = patternWith
         (Subject
@@ -665,25 +882,134 @@ closureToPatternSubject (Closure paramNames bodyExpr _capturedEnv) =
       , labels = Set.fromList ["Closure"]
       , properties = Map.empty
       })
-    [envPattern, lambdaPattern]
+    [scopePattern, lambdaPattern]
+
+-- | Extracts parent scope reference and bindings from inline :Scope pattern
+-- Format: [e1:Scope | parent_ref, [binding1...], [binding2...], ...]
+-- Returns: (parent_scope_id_or_pattern, bindings)
+-- parent_scope_id_or_pattern is:
+--   - Nothing for program-level (empty pattern)
+--   - Just (Left identifier) for identifier reference to parent
+--   - Just (Right pattern) for inlined parent scope pattern
+extractScopeStructure :: Pattern Subject -> Either Error (Maybe (Either SubjectCore.Symbol (Pattern Subject)), [Pattern Subject])
+extractScopeStructure scopePat = do
+  let scopeSubj = PatternCore.value scopePat
+  if "Scope" `Set.member` labels scopeSubj
+    then do
+      let scopeElements = PatternCore.elements scopePat
+      case scopeElements of
+        [] -> Right (Nothing, [])  -- Empty scope (program-level)
+        parentRef : bindings -> do
+          -- First element is parent scope reference
+          let parentSubj = PatternCore.value parentRef
+          parentScope <- if Set.null (labels parentSubj) && identity parentSubj == SubjectCore.Symbol ""
+            then Right Nothing  -- Empty = program-level
+            else do
+              -- Check if it's an identifier reference or an inlined scope pattern
+              if "Scope" `Set.member` labels parentSubj
+                then Right (Just (Right parentRef))  -- Inlined parent scope pattern
+              else if Set.null (labels parentSubj) && identity parentSubj /= SubjectCore.Symbol ""
+                then Right (Just (Left (identity parentSubj)))  -- Identifier reference to parent
+                else Left $ TypeMismatch "Parent scope reference must be identifier, empty pattern, or :Scope pattern" (VList [])
+          Right (parentScope, bindings)
+    else Left $ TypeMismatch "Expected Scope pattern" (VList [])
+
+-- | Extracts binding from a Binding pattern
+extractBindingFromPattern :: Pattern Subject -> Either Error (String, Value)
+extractBindingFromPattern bindingPat = do
+  let bindingSubj = PatternCore.value bindingPat
+  if "Binding" `Set.member` labels bindingSubj
+    then do
+      -- Extract name from properties
+      name <- case Map.lookup "name" (properties bindingSubj) of
+        Just (SubjectValue.VString n) -> Right n
+        _ -> Left $ TypeMismatch "Binding pattern missing name property" (VList [])
+      -- Extract value from single element
+      let bindingElements = PatternCore.elements bindingPat
+      case bindingElements of
+        [valuePat] -> do
+          value <- patternSubjectToValue valuePat
+          Right (name, value)
+        _ -> Left $ TypeMismatch "Binding pattern must have exactly one element (the value)" (VList [])
+    else Left $ TypeMismatch "Expected Binding pattern" (VList [])
+
+-- | Resolves bindings from a scope pattern by following parent chain
+-- For round-trip tests, we need to resolve parent scopes from the serialized structure
+-- This is a helper that extracts all bindings from a :Scope pattern and its parents
+resolveScopeBindings :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject) -> Either Error [(String, Value)]
+resolveScopeBindings scopePat scopeMap = do
+  (parentScopeRef, bindingPatterns) <- extractScopeStructure scopePat
+  -- Extract direct bindings
+  directBindings <- mapM extractBindingFromPattern bindingPatterns
+  -- Resolve parent bindings recursively
+  parentBindings <- case parentScopeRef of
+    Nothing -> Right []  -- Program-level, no parent
+    Just (Right parentScopePat) -> do
+      -- Inlined parent scope pattern - resolve it directly
+      resolveScopeBindings parentScopePat scopeMap
+    Just (Left parentId) -> do
+      -- Identifier reference - lookup parent scope in map
+      case Map.lookup parentId scopeMap of
+        Just parentScopePat -> resolveScopeBindings parentScopePat scopeMap
+        Nothing -> Left $ TypeMismatch ("Parent scope not found: " ++ show parentId) (VList [])
+  -- Merge: parent bindings first, then direct (direct shadows parent)
+  -- Use Map.fromList with later values overriding earlier ones
+  let allBindings = Map.toList $ Map.fromList (parentBindings ++ directBindings)
+  Right allBindings
+
+-- | Builds a map of scope identifiers to scope patterns from a closure pattern
+-- This extracts all :Scope patterns that are referenced (for parent resolution)
+buildScopeMap :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern Subject)
+buildScopeMap pat = 
+  let subj = PatternCore.value pat
+  in if "Closure" `Set.member` labels subj
+    then
+      let elements = PatternCore.elements pat
+      in if length elements >= 1
+        then
+          let scopePat = elements !! 0
+              scopeSubj = PatternCore.value scopePat
+              scopeId = identity scopeSubj
+              -- Add this scope to map
+              scopeMap = if "Scope" `Set.member` labels scopeSubj && scopeId /= SubjectCore.Symbol ""
+                then Map.singleton scopeId scopePat
+                else Map.empty
+              -- Recursively collect scopes from bindings (if any are closures)
+              bindingPatterns = case PatternCore.elements scopePat of
+                _parentRef : bindings -> bindings
+                [] -> []
+              closureScopes = Map.unions $ map (\bindingPat ->
+                let bindingElements = PatternCore.elements bindingPat
+                in case bindingElements of
+                  [valuePat] -> buildScopeMap valuePat  -- Recursively check if value is a closure
+                  _ -> Map.empty
+                ) bindingPatterns
+          in Map.union scopeMap closureScopes
+        else Map.empty
+    else Map.empty
 
 -- | Converts a Pattern Subject back to a Closure.
--- Extracts [:Env | ...], [:Lambda | [:Parameters | ...], [:Body | ...]] structure
--- TODO: Implement full binding resolution from environment section
+-- Extracts inline :Scope pattern: [e1:Scope | parent_ref, [bindings...]]
+-- Then extracts [:Lambda | [:Parameters | ...], [:Body | ...]] structure
+-- Resolves parent scope chain for round-trip support
 patternSubjectToClosure :: Pattern Subject -> Either Error Closure
 patternSubjectToClosure pat = do
   let subj = PatternCore.value pat
   if "Closure" `Set.member` labels subj
     then do
       let elements = PatternCore.elements pat
-      -- Closure should have 2 elements: [:Env | ...] and [:Lambda | ...]
+      -- Closure should have 2 elements: [e1:Scope | ...] and [:Lambda | ...]
       if length elements /= 2
-        then Left $ TypeMismatch "Closure pattern must have 2 elements (Env and Lambda)" (VList [])
+        then Left $ TypeMismatch "Closure pattern must have 2 elements (Scope and Lambda)" (VList [])
         else do
-          let _envPat = elements !! 0  -- Will be used for binding resolution
+          let scopePat = elements !! 0
               lambdaPat = elements !! 1
-          -- Extract environment (for now, use empty - will be resolved from environment section)
-          let capturedEnv = initialEnv
+          -- Build scope map from this closure and any nested closures
+          let scopeMap = buildScopeMap pat
+          -- Resolve all bindings (including from parent chain)
+          allBindings <- resolveScopeBindings scopePat scopeMap
+          -- Build captured environment: merge with standard library
+          let capturedEnv = Map.union (Map.fromList allBindings) initialEnv
           -- Extract lambda structure
           let lambdaSubj = PatternCore.value lambdaPat
           if "Lambda" `Set.member` labels lambdaSubj
@@ -701,8 +1027,27 @@ patternSubjectToClosure pat = do
                     then do
                       let paramElements = PatternCore.elements paramsPat
                       paramNames <- mapM extractParamName paramElements
-                      -- Extract body
-                      bodyExpr <- patternSubjectToExpr bodyPat
+                      -- Build identifier-to-name map from binding patterns for body transformation
+                      -- Extract identifiers from binding patterns (they have the identifier as their identity)
+                      let (_, bindingPatterns) = case extractScopeStructure scopePat of
+                            Right (_, bp) -> ((), bp)
+                            Left _ -> ((), [])
+                          identifierToName = Map.fromList $ 
+                            mapMaybe (\bp -> do
+                              let bindingSubj = PatternCore.value bp
+                              if "Binding" `Set.member` labels bindingSubj
+                                then do
+                                  name <- case Map.lookup "name" (properties bindingSubj) of
+                                    Just (SubjectValue.VString n) -> Just n
+                                    _ -> Nothing
+                                  let identifier = identity bindingSubj
+                                  if identifier /= SubjectCore.Symbol ""
+                                    then Just (identifier, name)
+                                    else Nothing
+                                else Nothing
+                              ) bindingPatterns
+                      -- Extract body with identifier resolution
+                      bodyExpr <- patternSubjectToExprWithBindings identifierToName bodyPat
                       Right $ Closure paramNames bodyExpr capturedEnv
                     else Left $ TypeMismatch "Expected Parameters pattern" (VList [])
             else Left $ TypeMismatch "Expected Lambda pattern" (VList [])
@@ -719,26 +1064,26 @@ extractParamName pat = do
     else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VList [])
 
 -- | Serializes a program (list of values) to Gram notation with file-level structure.
--- TODO: Implement file-level property records, environment section, expressions
+-- TODO: Implement file-level property records, expressions
 programToGram :: [Value] -> Env -> String
 programToGram values _runtimeEnv = 
   -- For now, serialize each value separately
   -- Full implementation will:
   -- 1. Create file-level property record {kind: "Pattern Lisp", ...}
-  -- 2. Collect all bindings from closures, deduplicate, create Environment section
-  -- 3. Serialize expressions as patterns in file sequence
+  -- 2. Serialize expressions as patterns in file sequence
+  -- Note: No separate Environment section - scopes are inlined in :Scope patterns
   unlines $ map (\v -> toGram (valueToPatternSubjectForGram v)) values
 
 -- | Deserializes Gram notation to a program (list of values and environment).
--- TODO: Implement file-level parsing, environment section parsing, expressions parsing
+-- TODO: Implement file-level parsing, expressions parsing
 gramToProgram :: String -> Either Error ([Value], Env)
 gramToProgram gramText = do
   -- For now, parse as single pattern
   -- Full implementation will:
   -- 1. Parse file-level property record
-  -- 2. Parse optional Environment section
-  -- 3. Parse remaining patterns as expressions
-  -- 4. Merge environment with standard library
+  -- 2. Parse remaining patterns as expressions
+  -- 3. Merge environment with standard library
+  -- Note: No separate Environment section - scopes are inlined in :Scope patterns
   pat <- case fromGram gramText of
     Left parseErr -> Left $ ParseError (show parseErr)
     Right p -> Right p

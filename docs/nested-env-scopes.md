@@ -13,7 +13,7 @@
 ```gram
 { kind: "Pattern Lisp" }
 
-[e0:Env |
+[e0:Scope |
   [],                        // first element is reference to parent, which is empty
   [ :Binding {name: "x"} |
     [:Number {value: 1}]
@@ -24,7 +24,7 @@
 ]
 
 [:Closure |
-  [e1:Env |
+  [e1:Scope |
     e0,                       // first element is reference to parent
     [ :Binding {name: "x"} |  // shadows "x" from parent
       [:Number {value: 10}]
@@ -34,7 +34,7 @@
     [:Parameters],
     [:Body |
       [:Let |
-        [e2:Env |
+        [e2:Scope |
           e1,                       // first element points to parent env
           [ :Binding {name: "x"} |  // new binding
             [:Number {value: 20}]
@@ -42,7 +42,7 @@
         ],
         [:Body |
           [:Closure |
-            [e3:Env | e2,           // first element points to parent env
+            [e3:Scope | e2,           // first element points to parent scope
             ],
             [:Lambda |
               [:Parameters],
