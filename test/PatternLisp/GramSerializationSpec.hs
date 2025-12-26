@@ -74,10 +74,11 @@ roundTripValue val env = do
     else Left $ TypeMismatch ("Round-trip failed. " ++ debugInfo) val'
 
 -- Helper to run roundTripValue in IO context
-runRoundTripValue :: Value -> Env -> IO Bool
+-- Throws on failure, returns () on success
+runRoundTripValue :: Value -> Env -> IO ()
 runRoundTripValue val env = case roundTripValue val env of
   Left err -> fail $ "Round-trip error: " ++ show err
-  Right result -> if result then return True else fail "Round-trip failed: values not equal (see error details above)"
+  Right result -> if result then return () else fail "Round-trip failed: values not equal (see error details above)"
 
 -- Helper to apply a closure (reimplementing logic since applyClosure is not exported)
 applyClosureHelper :: Closure -> [Value] -> Env -> Either Error Value
@@ -99,31 +100,26 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "Round-trip: Basic value types" $ do
     it "round-trip numbers" $ do
       let val = VNumber 42
-      result <- runRoundTripValue val initialEnv
-      if result then return () else fail "Round-trip failed: values not equal"
+      runRoundTripValue val initialEnv
     
     it "round-trip strings" $ do
       let val = VString (T.pack "hello")
-      result <- runRoundTripValue val initialEnv
-      if result then return () else fail "Round-trip failed: values not equal"
+      runRoundTripValue val initialEnv
     
     it "round-trip booleans" $ do
       let val = VBool True
-      result <- runRoundTripValue val initialEnv
-      if result then return () else fail "Round-trip failed: values not equal"
+      runRoundTripValue val initialEnv
     
     it "round-trip lists" $ do
       let val = VList [VNumber 1, VNumber 2, VNumber 3]
-      result <- runRoundTripValue val initialEnv
-      if result then return () else fail "Round-trip failed: values not equal"
+      runRoundTripValue val initialEnv
     
     it "round-trip patterns" $ do
       case evalToPattern "42" initialEnv of
         Left err -> fail $ "Eval error: " ++ show err
         Right pat -> do
           let val = VPattern pat
-          result <- runRoundTripValue val initialEnv
-          if result then return () else fail "Round-trip failed: values not equal"
+          runRoundTripValue val initialEnv
   
   describe "Round-trip: Closures" $ do
     it "round-trip simple closure" $ do
@@ -133,8 +129,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
             let val = VClosure closure
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "round-trip closure with captured environment" $ do
@@ -144,8 +139,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
             let val = VClosure closure
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "round-trip nested closures" $ do
@@ -155,8 +149,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
             let val = VClosure closure
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "round-trip mutually recursive closures" $ do
@@ -166,8 +159,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
             let val = VClosure closure
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "round-trip self-recursive closure" $ do
@@ -177,8 +169,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
             let val = VClosure closure
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "closure remains executable after round-trip" $ do
@@ -217,8 +208,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "Round-trip: Primitives" $ do
     it "round-trip primitives" $ do
       let val = VPrimitive Add
-      result <- runRoundTripValue val initialEnv
-      if result then return () else fail "Round-trip failed: values not equal"
+      runRoundTripValue val initialEnv
     
     it "primitive remains functional after round-trip" $ do
       let val = VPrimitive Add
@@ -244,8 +234,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VPattern pat) -> do
             let val = VPattern pat
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VPattern, got: " ++ show val
   
   describe "Inline scope serialization" $ do
@@ -272,8 +261,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                     if scopeId /= SubjectCore.Symbol ""
                       then do
                         -- Round-trip should work
-                        result <- runRoundTripValue val initialEnv
-                        if result then return () else fail "Round-trip failed: values not equal"
+                        runRoundTripValue val initialEnv
                       else fail "Scope pattern missing identifier"
                   else fail "First element is not a :Scope pattern"
               else fail "Closure pattern missing elements"
@@ -300,8 +288,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                 if length bindingPatterns >= 2
                   then do
                     -- Round-trip should work
-                    result <- runRoundTripValue val initialEnv
-                    if result then return () else fail "Round-trip failed: values not equal"
+                    runRoundTripValue val initialEnv
                   else fail $ "Expected at least 2 bindings, got: " ++ show (length bindingPatterns)
               else fail $ "Expected at least 2 scope elements (parent + bindings), got: " ++ show (length scopeElements)
           Right val -> fail $ "Expected VClosure, got: " ++ show val
@@ -323,9 +310,8 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                   -- Both closures capture x=10 from their respective let scopes
                   -- Since they have the same name and value, they should deduplicate
                   -- Both should round-trip correctly
-                  result1 <- runRoundTripValue (VClosure c1) initialEnv
-                  result2 <- runRoundTripValue (VClosure c2) initialEnv
-                  if result1 && result2 then return () else fail "Round-trip failed: values not equal"
+                  runRoundTripValue (VClosure c1) initialEnv
+                  runRoundTripValue (VClosure c2) initialEnv
                 Right val -> fail $ "Expected VClosure for second closure, got: " ++ show val
           Right val -> fail $ "Expected VClosure for first closure, got: " ++ show val
   
@@ -340,8 +326,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Right (VClosure closure) -> do
             let val = VClosure closure
             -- Round-trip should preserve the distinction
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "special form labels preserved (If, Let, Begin, Define, Quote)" $ do
@@ -354,8 +339,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
           Right (VClosure closure) -> do
             let val = VClosure closure
             -- Round-trip should preserve special form labels
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
   
   describe "File-level serialization" $ do
@@ -396,9 +380,8 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                     let checkValue v1 v2 = case (v1, v2) of
                           (VClosure c1, VClosure c2) -> do
                             -- For closures, verify round-trip works
-                            result1 <- runRoundTripValue v1 initialEnv
-                            result2 <- runRoundTripValue v2 initialEnv
-                            if result1 && result2 then return () else fail "Closure round-trip failed"
+                            runRoundTripValue v1 initialEnv
+                            runRoundTripValue v2 initialEnv
                           (v1', v2') -> if v1' == v2' then return () else fail $ "Value mismatch: " ++ show v1' ++ " != " ++ show v2'
                     sequence_ $ zipWith checkValue values values'
                     -- Environment should be standard library
@@ -422,8 +405,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                 -- Since this closure doesn't capture anything, the scope should be empty or minimal
             -- For a simple closure without captures, the scope should have empty parent and no bindings
             -- (or just the parent reference)
-            result <- runRoundTripValue val initialEnv
-            if result then return () else fail "Round-trip failed: values not equal"
+            runRoundTripValue val initialEnv
           Right val -> fail $ "Expected VClosure, got: " ++ show val
     
     it "missing primitive in registry errors correctly" $ do
