@@ -74,6 +74,8 @@ import qualified Data.Set as Set
 import Data.List (nubBy)
 import Data.Maybe (mapMaybe)
 import Control.Monad.State (State, runState, get, modify)
+import Control.Monad (foldM)
+import Debug.Trace (trace)
 import Gram.Serialize (toGram)
 import Gram.Parse (fromGram)
 
@@ -848,7 +850,11 @@ nextScopeId = do
 closureToPatternSubjectWithState :: Closure -> ScopeIdState (Pattern Subject)
 closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
   -- Collect and process bindings from captured environment
+  -- DEBUG: Log original environment
   let bindingInfos = collectBindings initialEnv capturedEnv
+      _ = trace ("[SERIALIZE] closureToPatternSubjectWithState: originalEnvSize=" ++ show (Map.size capturedEnv) ++
+                 ", originalKeys=" ++ show (Map.keys capturedEnv) ++
+                 ", collectedBindings=" ++ show (map bindingName bindingInfos)) ()
       -- Create a map from binding names to identifiers for body transformation
       bindingMap = Map.fromList $ map (\bi -> (bindingName bi, bindingIdentifier bi)) bindingInfos
       -- Convert body expression to Pattern Subject, replacing bound variables with identifier references
@@ -973,14 +979,22 @@ closureToPatternSubject closure =
 extractScopeStructure :: Pattern Subject -> Either Error (Maybe (Either SubjectCore.Symbol (Pattern Subject)), [Pattern Subject])
 extractScopeStructure scopePat = do
   let scopeSubj = PatternCore.value scopePat
+      scopeId = identity scopeSubj
   if "Scope" `Set.member` labels scopeSubj
     then do
       let scopeElements = PatternCore.elements scopePat
+          _ = trace ("[DESERIALIZE] extractScopeStructure: scopeId=" ++ show scopeId ++
+                     ", scopeElementsCount=" ++ show (length scopeElements) ++
+                     ", scopeElementLabels=" ++ show (map (\e -> Set.toList (labels (PatternCore.value e))) scopeElements)) ()
       case scopeElements of
         [] -> Right (Nothing, [])  -- Empty scope (program-level)
         parentRef : bindings -> do
           -- First element is parent scope reference
           let parentSubj = PatternCore.value parentRef
+              _ = trace ("[DESERIALIZE] extractScopeStructure: parentRefLabels=" ++ show (Set.toList (labels parentSubj)) ++
+                         ", parentRefIdentity=" ++ show (identity parentSubj) ++
+                         ", bindingsCount=" ++ show (length bindings) ++
+                         ", bindingLabels=" ++ show (map (\b -> Set.toList (labels (PatternCore.value b))) bindings)) ()
           parentScope <- if Set.null (labels parentSubj) && identity parentSubj == SubjectCore.Symbol ""
             then Right Nothing  -- Empty = program-level
             else do
@@ -997,20 +1011,38 @@ extractScopeStructure scopePat = do
 extractBindingFromPattern :: Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Pattern Subject -> Either Error (String, Value)
 extractBindingFromPattern scopeMap resolvingScopes bindingPat = do
   let bindingSubj = PatternCore.value bindingPat
+      bindingLabels = Set.toList (labels bindingSubj)
+      bindingId = identity bindingSubj
+      _ = trace ("[DESERIALIZE] extractBindingFromPattern: bindingId=" ++ show bindingId ++
+                 ", bindingLabels=" ++ show bindingLabels ++
+                 ", hasBindingLabel=" ++ show ("Binding" `Set.member` labels bindingSubj)) ()
   if "Binding" `Set.member` labels bindingSubj
     then do
       -- Extract name from properties
       name <- case Map.lookup "name" (properties bindingSubj) of
-        Just (SubjectValue.VString n) -> Right n
-        _ -> Left $ TypeMismatch "Binding pattern missing name property" (VList [])
+        Just (SubjectValue.VString n) -> 
+          let _ = trace ("[DESERIALIZE] extractBindingFromPattern: extracted name=" ++ n) ()
+          in Right n
+        _ -> Left $ TypeMismatch ("Binding pattern missing name property. Binding labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VList [])
       -- Extract value from single element
       let bindingElements = PatternCore.elements bindingPat
+          _ = trace ("[DESERIALIZE] extractBindingFromPattern: bindingElementsCount=" ++ show (length bindingElements)) ()
       case bindingElements of
         [valuePat] -> do
-          value <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat
+          let _ = trace ("[DESERIALIZE] extractBindingFromPattern: valuePattern labels=" ++ 
+                         show (Set.toList (labels (PatternCore.value valuePat))) ++ 
+                         ", valueId=" ++ show (identity (PatternCore.value valuePat))) ()
+          value <- case patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat of
+            Left err -> 
+              let _ = trace ("[DESERIALIZE] extractBindingFromPattern: patternSubjectToValueWithScopeMap failed: " ++ show err) ()
+              in Left err
+            Right v -> 
+              let _ = trace ("[DESERIALIZE] extractBindingFromPattern: extracted value=" ++ show v) ()
+              in Right v
+          let _ = trace ("[DESERIALIZE] extractBindingFromPattern: returning (" ++ name ++ ", " ++ show value ++ ")") ()
           Right (name, value)
-        _ -> Left $ TypeMismatch "Binding pattern must have exactly one element (the value)" (VList [])
-    else Left $ TypeMismatch "Expected Binding pattern" (VList [])
+        _ -> Left $ TypeMismatch ("Binding pattern must have exactly one element (the value). Found " ++ show (length bindingElements) ++ " elements. Binding labels: " ++ show bindingLabels) (VList [])
+    else Left $ TypeMismatch ("Expected Binding pattern, got labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VList [])
 
 -- | Resolves bindings from a scope pattern by following parent chain
 -- For round-trip tests, we need to resolve parent scopes from the serialized structure
@@ -1020,15 +1052,29 @@ resolveScopeBindings :: Pattern Subject -> Map.Map SubjectCore.Symbol (Pattern S
 resolveScopeBindings scopePat scopeMap resolvingScopes = do
   let scopeSubj = PatternCore.value scopePat
       scopeId = identity scopeSubj
+  -- DEBUG: Log scope resolution
+  let debugMsg = "resolveScopeBindings: scopeId=" ++ show scopeId ++ ", resolvingScopes=" ++ show (Set.toList resolvingScopes)
   -- Check for cycles: if we're already resolving this exact scope, return empty to break recursion
-  -- This prevents infinite loops when a scope references itself (directly or indirectly)
   if scopeId /= SubjectCore.Symbol "" && scopeId `Set.member` resolvingScopes
-    then Right []  -- Cycle detected - we're already resolving this scope, return empty to break recursion
+    then do
+      -- DEBUG: Log cycle detection
+      let _ = trace ("[DESERIALIZE] CYCLE DETECTED: " ++ debugMsg) ()
+      Right []  -- Cycle detected - we're already resolving this scope, return empty to break recursion
     else do
       let newResolvingScopes = if scopeId /= SubjectCore.Symbol ""
             then Set.insert scopeId resolvingScopes
             else resolvingScopes
       (parentScopeRef, bindingPatterns) <- extractScopeStructure scopePat
+      -- DEBUG: Log what extractScopeStructure returned
+      let bindingPatternsCount = length bindingPatterns
+          _ = trace ("[DESERIALIZE] resolveScopeBindings: extractScopeStructure returned " ++ show bindingPatternsCount ++ 
+                     " binding patterns. Labels: " ++ show (map (\bp -> Set.toList (labels (PatternCore.value bp))) bindingPatterns)) ()
+      -- FORCE ERROR if bindingPatterns is unexpectedly empty when scope has elements
+      let _ = if bindingPatternsCount == 0 && length (PatternCore.elements scopePat) > 1
+            then error $ "CRITICAL: resolveScopeBindings: extractScopeStructure returned 0 bindingPatterns but scope has " ++ 
+                        show (length (PatternCore.elements scopePat)) ++ " elements! Scope elements: " ++ 
+                        show (map (\e -> (Set.toList (labels (PatternCore.value e)), identity (PatternCore.value e))) (PatternCore.elements scopePat))
+            else ()
       -- Resolve parent bindings FIRST, before extracting direct bindings
       -- This ensures parent bindings are available when extracting nested closures that reference them
       parentBindings <- case parentScopeRef of
@@ -1044,7 +1090,74 @@ resolveScopeBindings scopePat scopeMap resolvingScopes = do
       -- Extract direct bindings AFTER resolving parent bindings
       -- This allows nested closures to use parent bindings that are already resolved
       -- Pass parent bindings in scope map so nested closures can access them
-      directBindings <- mapM (extractBindingFromPattern scopeMap newResolvingScopes) bindingPatterns
+      -- DEBUG: Verify bindingPatterns before extraction
+      let bindingCount = length bindingPatterns
+          bindingDebug = map (\bp ->
+            let subj = PatternCore.value bp
+            in (Set.toList (labels subj), identity subj, Map.keys (properties subj))
+            ) bindingPatterns
+          -- FORCE ERROR if we have patterns but count is wrong
+          _ = if bindingCount > 0 && null bindingPatterns
+            then error "CRITICAL BUG: bindingCount > 0 but bindingPatterns is null!"
+            else if bindingCount == 0 && not (null bindingPatterns)
+            then error "CRITICAL BUG: bindingCount == 0 but bindingPatterns is not null!"
+            else ()
+      -- Try to extract each binding individually to see which one fails
+      -- Extract bindings one by one to get detailed error info
+      directBindings <- if bindingCount == 0
+        then Right []  -- No bindings to extract
+        else do
+          -- CRITICAL: Verify bindingPatterns is not empty before foldM
+          if null bindingPatterns
+            then Left $ TypeMismatch ("resolveScopeBindings: bindingPatterns is empty but bindingCount=" ++ show bindingCount ++ 
+                                      ". This should not happen!") (VList [])
+            else do
+              -- Force evaluation and add error context - this WILL be called if bindingCount > 0
+              bindings <- case foldM (\acc bp -> do
+                    let bindingSubj = PatternCore.value bp
+                        bindingLabels = Set.toList (labels bindingSubj)
+                        bindingId = identity bindingSubj
+                        bindingElements = PatternCore.elements bp
+                        bindingElementCount = length bindingElements
+                    -- Call extractBindingFromPattern and wrap any error with context
+                    case extractBindingFromPattern scopeMap newResolvingScopes bp of
+                      Left err -> Left $ TypeMismatch ("Failed to extract binding #" ++ show (length acc + 1) ++ 
+                                                       ". Binding labels: " ++ show bindingLabels ++ 
+                                                       ", id: " ++ show bindingId ++ 
+                                                       ", elementCount: " ++ show bindingElementCount ++
+                                                       ". Error: " ++ show err) (VList [])
+                      Right binding -> Right (acc ++ [binding])
+                  ) [] bindingPatterns of
+                Left err -> 
+                  let _ = error $ "CRITICAL: foldM returned Left error: " ++ show err
+                  in Left err
+                Right bs -> 
+                  -- ALWAYS check if we got empty results when we expected bindings
+                  let _ = if null bs && bindingCount > 0
+                        then error $ "CRITICAL: foldM returned empty list! bindingCount=" ++ show bindingCount ++ 
+                                    ", bindingPatterns length=" ++ show (length bindingPatterns) ++
+                                    ", bs=" ++ show bs ++
+                                    ". Binding pattern details: " ++ show bindingDebug
+                        else ()
+                  in if null bs
+                    then Left $ TypeMismatch ("resolveScopeBindings: foldM returned empty list. bindingCount=" ++ show bindingCount ++ 
+                                              ", bindingPatterns length=" ++ show (length bindingPatterns) ++
+                                              ". Binding pattern details: " ++ show bindingDebug) (VList [])
+                    else Right bs
+              -- Double-check: if we have patterns but got no bindings, that's definitely an error
+              if null bindings && bindingCount > 0
+                then Left $ TypeMismatch ("resolveScopeBindings: FINAL CHECK - extracted 0 bindings from " ++ show bindingCount ++ 
+                                          " binding patterns after foldM. Binding pattern details: " ++ show bindingDebug) (VList [])
+                else Right bindings
+      -- DEBUG: Log binding extraction
+      let extractedCount = length directBindings
+          bindingNames = map fst directBindings
+          debugInfo = "bindingPatternsCount=" ++ show bindingCount ++
+                     ", extractedCount=" ++ show extractedCount ++
+                     ", bindingNames=" ++ show bindingNames ++
+                     ", parentBindings=" ++ show (map fst parentBindings) ++
+                     ", bindingPatternDetails=" ++ show bindingDebug
+      let _ = trace ("[DESERIALIZE] " ++ debugMsg ++ ", " ++ debugInfo) ()
       -- Merge: parent bindings first, then direct (direct shadows parent)
       -- Use Map.fromList with later values overriding earlier ones
       let allBindings = Map.toList $ Map.fromList (parentBindings ++ directBindings)
@@ -1103,57 +1216,69 @@ patternSubjectToClosure pat outerScopeMap resolvingScopes = do
           -- Merge with outer scope map to resolve parent references
           let localScopeMap = buildScopeMap pat
               scopeMap = Map.union localScopeMap outerScopeMap
-              scopeSubj = PatternCore.value scopePat
-              scopeId = identity scopeSubj
-              -- Add this scope to resolving set to detect cycles
-              newResolvingScopes = if scopeId /= SubjectCore.Symbol ""
-                then Set.insert scopeId resolvingScopes
-                else resolvingScopes
           -- Resolve all bindings (including from parent chain)
-          allBindings <- resolveScopeBindings scopePat scopeMap newResolvingScopes
-          -- Build captured environment: merge with standard library
-          let capturedEnv = Map.union (Map.fromList allBindings) initialEnv
-          -- Extract lambda structure
-          let lambdaSubj = PatternCore.value lambdaPat
-          if "Lambda" `Set.member` labels lambdaSubj
-            then do
-              let lambdaElements = PatternCore.elements lambdaPat
-              -- Lambda should have 2 elements: [:Parameters | ...] and [:Body | ...]
-              if length lambdaElements /= 2
-                then Left $ TypeMismatch "Lambda pattern must have 2 elements (Parameters and Body)" (VList [])
+          -- First, check what extractScopeStructure returns
+          case extractScopeStructure scopePat of
+            Left err -> Left err
+            Right (_, bindingPatterns) -> do
+              -- DEBUG: Log what we found
+              let bindingPatternDetails = map (\bp ->
+                    let bindingSubj = PatternCore.value bp
+                    in (Set.toList (labels bindingSubj), identity bindingSubj, Map.keys (properties bindingSubj))
+                    ) bindingPatterns
+              -- Now resolve bindings
+              -- NOTE: Don't add scopeId to resolvingScopes here - resolveScopeBindings will do it internally
+              allBindings <- resolveScopeBindings scopePat scopeMap resolvingScopes
+              -- Build captured environment: merge with standard library
+              let serializedBindings = Map.fromList allBindings
+                  capturedEnv = Map.union serializedBindings initialEnv
+                  scopeElements = PatternCore.elements scopePat
+                  scopeElementsCount = length scopeElements
+                  debugInfo = "extractScopeStructure found " ++ show (length bindingPatterns) ++ " binding patterns: " ++ show bindingPatternDetails ++
+                             ". resolveScopeBindings returned " ++ show (length allBindings) ++ " bindings: " ++ show (map fst allBindings) ++
+                             ". Scope has " ++ show scopeElementsCount ++ " elements: " ++ show (map (\e -> (Set.toList (labels (PatternCore.value e)), identity (PatternCore.value e))) scopeElements)
+              -- If we got no bindings but extractScopeStructure found binding patterns, this is an error
+              if null allBindings && not (null bindingPatterns)
+                then Left $ TypeMismatch ("No bindings resolved from scope. " ++ debugInfo) (VList [])
                 else do
-                  let paramsPat = lambdaElements !! 0
-                      bodyPat = lambdaElements !! 1
-                  -- Extract parameters
-                  let paramsSubj = PatternCore.value paramsPat
-                  if "Parameters" `Set.member` labels paramsSubj
+                  -- Extract lambda structure
+                  let lambdaSubj = PatternCore.value lambdaPat
+                  if "Lambda" `Set.member` labels lambdaSubj
                     then do
-                      let paramElements = PatternCore.elements paramsPat
-                      paramNames <- mapM extractParamName paramElements
-                      -- Build identifier-to-name map from binding patterns for body transformation
-                      -- Extract identifiers from binding patterns (they have the identifier as their identity)
-                      let (_, bindingPatterns) = case extractScopeStructure scopePat of
-                            Right (_, bp) -> ((), bp)
-                            Left _ -> ((), [])
-                          identifierToName = Map.fromList $ 
-                            mapMaybe (\bp -> do
-                              let bindingSubj = PatternCore.value bp
-                              if "Binding" `Set.member` labels bindingSubj
-                                then do
-                                  name <- case Map.lookup "name" (properties bindingSubj) of
-                                    Just (SubjectValue.VString n) -> Just n
-                                    _ -> Nothing
-                                  let identifier = identity bindingSubj
-                                  if identifier /= SubjectCore.Symbol ""
-                                    then Just (identifier, name)
-                                    else Nothing
-                                else Nothing
-                              ) bindingPatterns
-                      -- Extract body with identifier resolution
-                      bodyExpr <- patternSubjectToExprWithBindings identifierToName bodyPat
-                      Right $ Closure paramNames bodyExpr capturedEnv
-                    else Left $ TypeMismatch "Expected Parameters pattern" (VList [])
-            else Left $ TypeMismatch "Expected Lambda pattern" (VList [])
+                      let lambdaElements = PatternCore.elements lambdaPat
+                      -- Lambda should have 2 elements: [:Parameters | ...] and [:Body | ...]
+                      if length lambdaElements /= 2
+                        then Left $ TypeMismatch "Lambda pattern must have 2 elements (Parameters and Body)" (VList [])
+                        else do
+                          let paramsPat = lambdaElements !! 0
+                              bodyPat = lambdaElements !! 1
+                          -- Extract parameters
+                          let paramsSubj = PatternCore.value paramsPat
+                          if "Parameters" `Set.member` labels paramsSubj
+                            then do
+                              let paramElements = PatternCore.elements paramsPat
+                              paramNames <- mapM extractParamName paramElements
+                              -- Build identifier-to-name map from binding patterns for body transformation
+                              -- Extract identifiers from binding patterns (they have the identifier as their identity)
+                              let identifierToName = Map.fromList $ 
+                                    mapMaybe (\bp -> do
+                                      let bindingSubj = PatternCore.value bp
+                                      if "Binding" `Set.member` labels bindingSubj
+                                        then do
+                                          name <- case Map.lookup "name" (properties bindingSubj) of
+                                            Just (SubjectValue.VString n) -> Just n
+                                            _ -> Nothing
+                                          let identifier = identity bindingSubj
+                                          if identifier /= SubjectCore.Symbol ""
+                                            then Just (identifier, name)
+                                            else Nothing
+                                        else Nothing
+                                      ) bindingPatterns
+                              -- Extract body with identifier resolution
+                              bodyExpr <- patternSubjectToExprWithBindings identifierToName bodyPat
+                              Right $ Closure paramNames bodyExpr capturedEnv
+                            else Left $ TypeMismatch "Expected Parameters pattern" (VList [])
+                    else Left $ TypeMismatch "Expected Lambda pattern" (VList [])
     else Left $ TypeMismatch "Expected Closure pattern" (VList [])
 
 -- | Helper to extract parameter name from a Symbol pattern

@@ -54,13 +54,30 @@ roundTripValue val env = do
   -- Convert back to value using patternSubjectToValue
   val' <- patternSubjectToValue pat'
   -- Compare (values should be equal)
-  Right (val == val')
+  -- DEBUG: If values are closures, compare environments
+  let areEqual = val == val'
+      debugInfo = case (val, val') of
+        (VClosure (Closure params1 body1 env1), VClosure (Closure params2 body2 env2)) ->
+          let keys1 = Map.keys env1
+              keys2 = Map.keys env2
+              size1 = Map.size env1
+              size2 = Map.size env2
+          in "Closure comparison: params1=" ++ show params1 ++ 
+             ", params2=" ++ show params2 ++
+             ", env1Size=" ++ show size1 ++ ", env2Size=" ++ show size2 ++
+             ", env1Keys=" ++ show keys1 ++ ", env2Keys=" ++ show keys2 ++
+             ", envsEqual=" ++ show (env1 == env2) ++
+             ", bodiesEqual=" ++ show (body1 == body2)
+        _ -> "Not closures"
+  if areEqual
+    then Right True
+    else Left $ TypeMismatch ("Round-trip failed. " ++ debugInfo) val'
 
 -- Helper to run roundTripValue in IO context
 runRoundTripValue :: Value -> Env -> IO Bool
 runRoundTripValue val env = case roundTripValue val env of
   Left err -> fail $ "Round-trip error: " ++ show err
-  Right result -> return result
+  Right result -> if result then return True else fail "Round-trip failed: values not equal (see error details above)"
 
 -- Helper to apply a closure (reimplementing logic since applyClosure is not exported)
 applyClosureHelper :: Closure -> [Value] -> Env -> Either Error Value
@@ -426,4 +443,32 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
             TypeMismatch msg _ -> "Unknown" `elem` words msg || "primitive" `elem` words (map toLower msg)
             _ -> False)
         Right _ -> fail "Expected error for unknown primitive, but deserialization succeeded"
+
+    describe "Minimal test case for binding extraction" $ do
+      it "minimal closure with one captured binding" $ do
+        -- Minimal test: (let ((x 10)) (lambda (y) (+ x y)))
+        case parseExpr "(let ((x 10)) (lambda (y) (+ x y)))" of
+          Left err -> fail $ "Parse error: " ++ show err
+          Right expr -> case evalExpr expr initialEnv of
+            Left err2 -> fail $ "Eval error: " ++ show err2
+            Right (VClosure originalClosure) -> do
+              let originalEnv = env originalClosure
+              -- Verify original has 'x'
+              Map.member "x" originalEnv `shouldBe` True
+              Map.lookup "x" originalEnv `shouldBe` Just (VNumber 10)
+              
+              -- Get deserialized value to inspect
+              let pat = valueToPatternSubjectForGram (VClosure originalClosure)
+                  gramText = patternToGram pat
+              case gramToPattern gramText of
+                Left parseErr -> fail $ "Parse error: " ++ show parseErr
+                Right pat' -> case patternSubjectToValue pat' of
+                  Left err4 -> fail $ "Deserialization error: " ++ show err4
+                  Right (VClosure deserializedClosure) -> do
+                    let deserializedEnv = env deserializedClosure
+                    -- This will fail and show us the difference
+                    Map.member "x" deserializedEnv `shouldBe` True
+                    Map.lookup "x" deserializedEnv `shouldBe` Just (VNumber 10)
+                  Right val -> fail $ "Expected VClosure, got: " ++ show val
+            Right val -> fail $ "Expected VClosure, got: " ++ show val
 
