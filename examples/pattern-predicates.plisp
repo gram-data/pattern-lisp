@@ -1,0 +1,72 @@
+;; Pattern Predicates Example
+;; Demonstrates pattern-find, pattern-any?, and pattern-all? primitives
+;;
+;; These primitives allow you to search and filter patterns using predicate closures.
+;; They recursively traverse pattern structures to find or check subpatterns.
+
+;; ============================================================================
+;; Basic Examples with Atomic Patterns
+;; ============================================================================
+
+;; Create some atomic patterns for testing
+(define p1 (pattern 10))
+(define p2 (pattern 20))
+(define p3 (pattern 30))
+
+;; pattern-find: Find the first matching subpattern
+;; Returns the matching pattern, or empty list if no match
+(define found (pattern-find p2 (lambda (p) (= (pattern-value p) 20))))
+
+;; pattern-any?: Check if any subpattern matches the predicate
+;; Returns #t if any match found, #f otherwise
+(define has-twenty (pattern-any? p2 (lambda (p) (= (pattern-value p) 20))))
+
+;; pattern-all?: Check if all subpatterns match the predicate
+;; For atomic patterns, checks the pattern itself
+;; Returns #t if all match, #f otherwise
+(define all-match (pattern-all? p2 (lambda (p) (= (pattern-value p) 20))))
+
+;; Example: Find pattern that doesn't exist (returns empty list)
+(define not-found (pattern-find p1 (lambda (p) (= (pattern-value p) 99))))
+
+;; Example: Check if any pattern matches a condition
+(define has-ten (pattern-any? p1 (lambda (p) (= (pattern-value p) 10))))
+
+;; Example: Check if all patterns match (for atomic pattern, checks itself)
+(define all-ten (pattern-all? p1 (lambda (p) (= (pattern-value p) 10))))
+
+;; ============================================================================
+;; Using Closures with Captured Environment
+;; ============================================================================
+
+;; Predicates can capture variables from their environment
+(define target-value 20)
+(define find-target (lambda (p) (= (pattern-value p) target-value)))
+(define found-with-closure (pattern-find p2 find-target))
+
+;; ============================================================================
+;; Complex Predicates
+;; ============================================================================
+
+;; Find patterns with values greater than 15
+(define find-large (pattern-find p2 (lambda (p) (> (pattern-value p) 15))))
+
+;; Check if any pattern has value less than 25
+(define has-small (pattern-any? p3 (lambda (p) (< (pattern-value p) 25))))
+
+;; Check if all patterns have values greater than 5
+(define all-large (pattern-all? p1 (lambda (p) (> (pattern-value p) 5))))
+
+;; ============================================================================
+;; Error Cases (commented out - would cause errors if uncommented)
+;; ============================================================================
+
+;; Type error - pattern-find expects closure as predicate
+;; (pattern-find p1 "not-a-closure")
+
+;; Arity error - predicate must take exactly one parameter
+;; (pattern-find p1 (lambda () #t))
+
+;; Type error - predicate must return boolean
+;; (pattern-find p1 (lambda (p) 42))
+

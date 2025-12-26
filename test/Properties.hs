@@ -2,10 +2,10 @@ module Properties (spec) where
 
 import Test.Hspec
 import Test.QuickCheck
-import Lisp.Syntax
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
+import PatternLisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Control.Monad

@@ -1,0 +1,23 @@
+;; Pattern Basics Example
+;; Demonstrates creating and querying Pattern values
+
+;; Create an atomic pattern
+(define hello (pattern "hello"))
+
+;; Create a pattern with elements (empty for now)
+(define root (pattern-with "root" '()))
+
+;; Query pattern decoration
+(pattern-value hello)
+
+;; Query pattern elements
+(pattern-elements root)
+
+;; Get structural information
+(pattern-size hello)      ; => 1 (atomic pattern)
+(pattern-depth hello)     ; => 0 (no nesting)
+(pattern-length root)     ; => 0 (no elements)
+
+;; Flatten all values
+(pattern-values hello)    ; => ("hello")
+

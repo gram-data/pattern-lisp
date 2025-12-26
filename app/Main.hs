@@ -1,14 +1,19 @@
 module Main where
 
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
-import Lisp.Syntax
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
+import PatternLisp.Syntax
+import PatternLisp.FileLoader
+import PatternLisp.Gram
 import System.IO
 import System.Environment
 import System.Exit
 import qualified Data.Text as T
-import Data.List (isPrefixOf)
+import qualified Data.Map as Map
+import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn)
+import Data.Maybe (maybe)
+import Control.Applicative ((<|>))
 
 -- | Format a Value for display
 formatValue :: Value -> String
@@ -17,8 +22,30 @@ formatValue (VString s) = T.unpack s
 formatValue (VBool True) = "#t"
 formatValue (VBool False) = "#f"
 formatValue (VList vals) = "(" ++ unwords (map formatValue vals) ++ ")"
+formatValue (VPattern _) = "<pattern>"
 formatValue (VClosure _) = "<closure>"
 formatValue (VPrimitive _) = "<primitive>"
+
+-- | Format a Value type for display in variable listing
+formatValueType :: Value -> String
+formatValueType (VNumber _) = "Number"
+formatValueType (VString _) = "String"
+formatValueType (VBool _) = "Bool"
+formatValueType (VList _) = "List"
+formatValueType (VPattern _) = "Pattern"
+formatValueType (VClosure (Closure params _ _)) = "Closure(" ++ unwords params ++ ")"
+formatValueType (VPrimitive _) = "Primitive"
+
+-- | Format environment variables for display
+formatEnv :: Env -> String
+formatEnv env = 
+  if Map.null env
+    then "No variables in scope"
+    else unlines $ map formatBinding $ sortByVarName $ Map.toList env
+  where
+    sortByVarName = sortOn fst  -- Sort by variable name (first element of tuple)
+    formatBinding (name, val) = 
+      "  " ++ name ++ " : " ++ formatValueType val
 
 -- | Format an Error for display
 formatError :: Error -> String
@@ -34,32 +61,53 @@ formatError (ParseError msg) = "Parse error: " ++ msg
 trim :: String -> String
 trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
 
--- | Evaluate a multi-line program (wraps in begin form)
-evaluateProgram :: String -> Env -> Either Error (Value, Env)
-evaluateProgram programText initialEnv = do
-  -- Remove comment lines and empty lines, join with spaces
-  let nonCommentLines = filter (not . isCommentOrEmpty) (lines programText)
-      cleaned = unwords nonCommentLines
-  -- Wrap in begin form to handle multiple expressions with proper environment threading
-  let beginProgram = "(begin " ++ cleaned ++ ")"
-  expr <- parseExpr beginProgram
-  evalExprWithEnv expr initialEnv
-  where
-    isCommentOrEmpty line = 
-      let trimmed = trim line
-      in null trimmed || ";;" `isPrefixOf` trimmed
+-- | Check if a file is a .plisp file
+isPlisp :: FilePath -> Bool
+isPlisp = isSuffixOf ".plisp"
 
--- | Load and evaluate a file
-loadFile :: FilePath -> Env -> IO (Env, Bool)
-loadFile filepath env = do
-  content <- readFile filepath
-  case evaluateProgram content env of
-    Left err -> do
-      hPutStrLn stderr (formatError err)
-      return (env, True)
-    Right (val, newEnv) -> do
-      putStrLn (formatValue val)
-      return (newEnv, True)
+-- | Check if a file is a .gram file
+isGram :: FilePath -> Bool
+isGram = isSuffixOf ".gram"
+
+-- | Separate files from flags in command-line arguments
+-- Excludes the expression argument that comes after -e or --eval
+parseArgs :: [String] -> ([FilePath], [String])
+parseArgs args = 
+  let excludeEvalExpr [] = ([], [])
+      excludeEvalExpr [x] 
+        | x `elem` ["-i", "--interactive", "-e", "--eval", "-h", "--help"] = ([], [x])
+        | otherwise = ([x], [])
+      excludeEvalExpr (x:y:xs)
+        | x `elem` ["-e", "--eval"] = 
+            let (files', flags') = excludeEvalExpr xs
+            in (files', x : flags')  -- Include -e in flags, skip y (the expression)
+        | x `elem` ["-i", "--interactive", "-h", "--help"] = 
+            let (files', flags') = excludeEvalExpr (y:xs)
+            in (files', x : flags')
+        | otherwise = 
+            let (files', flags') = excludeEvalExpr (y:xs)
+            in (x : files', flags')
+  in excludeEvalExpr args
+
+-- | Extract eval expression from arguments (after -e or --eval)
+extractEvalExpr :: [String] -> Maybe String
+extractEvalExpr args = do
+  idx <- elemIndex "-e" args <|> elemIndex "--eval" args
+  if idx + 1 < length args
+    then Just (args !! (idx + 1))
+    else Nothing
+
+-- | Check if -i or --interactive flag is present
+hasInteractiveFlag :: [String] -> Bool
+hasInteractiveFlag args = "-i" `elem` args || "--interactive" `elem` args
+
+-- | Check if -e or --eval flag is present
+hasEvalFlag :: [String] -> Bool
+hasEvalFlag args = "-e" `elem` args || "--eval" `elem` args
+
+-- | Check if -h or --help flag is present
+hasHelpFlag :: [String] -> Bool
+hasHelpFlag args = "-h" `elem` args || "--help" `elem` args
 
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
@@ -67,15 +115,17 @@ processLine input env
   | input == ":quit" || input == ":q" = return (env, False)
   | input == ":help" || input == ":h" = do
       putStrLn "Pattern Lisp REPL"
-      putStrLn "Commands: :quit, :q, :help, :h, :load <file>"
+      putStrLn "Commands:"
+      putStrLn "  :quit, :q        Exit REPL"
+      putStrLn "  :help, :h         Show this help"
+      putStrLn "  :vars, :v        Show variables in scope"
+      putStrLn ""
+      putStrLn "  Execute tools: (tool-name state-name)"
       return (env, True)
-  | ":load" `isPrefixOf` input || ":l" `isPrefixOf` input = do
-      let filepath = trim (dropWhile (/= ' ') (dropWhile (== ' ') input))
-      if null filepath
-        then do
-          hPutStrLn stderr "Error: :load requires a file path"
-          return (env, True)
-        else loadFile filepath env
+  | input == ":vars" || input == ":v" = do
+      putStrLn "Variables in scope:"
+      putStrLn (formatEnv env)
+      return (env, True)
   | null (trim input) = return (env, True)
   | otherwise = case parseExpr input of
       Left err -> do
@@ -104,26 +154,134 @@ repl env = do
         then repl newEnv
         else return ()
 
+-- | Execute expression in loaded environment
+executeWithEval :: [String] -> String -> IO ()
+executeWithEval allArgs exprStr = do
+  -- Separate files from flags
+  let (files, flags) = parseArgs allArgs
+  
+  -- Load files
+  envResult <- processFiles files initialEnv
+  case envResult of
+    Left err -> do
+      hPutStrLn stderr (formatError err)
+      exitFailure
+    Right env -> do
+      -- Parse and evaluate expression
+      case parseExpr exprStr of
+        Left parseErr -> do
+          hPutStrLn stderr (formatError parseErr)
+          exitFailure
+        Right expr -> do
+          case evalExprWithEnv expr env of
+            Left evalErr -> do
+              hPutStrLn stderr (formatError evalErr)
+              exitFailure
+            Right (val, _) -> do
+              -- If result is a Pattern, output as gram; otherwise format as value
+              case val of
+                VPattern pat -> putStr (patternToGram pat)
+                _ -> putStrLn (formatValue val)
+
+-- | Load files and output the last plisp file's result
+executeFiles :: [FilePath] -> IO ()
+executeFiles files = do
+  envResult <- processFiles files initialEnv
+  case envResult of
+    Left err -> do
+      hPutStrLn stderr (formatError err)
+      exitFailure
+    Right env -> do
+      -- Get plisp files in order
+      let plispFiles = filter isPlisp files
+      case plispFiles of
+        [] -> do
+          -- No plisp files, just exit successfully (gram files were loaded)
+          return ()
+        _ -> do
+          -- Get the last plisp file's result
+          let lastPlispFile = last plispFiles
+              name = deriveNameFromFilename lastPlispFile
+          case Map.lookup name env of
+            Nothing -> do
+              hPutStrLn stderr $ "Error: Could not find result for file: " ++ name
+              exitFailure
+            Just val -> do
+              -- If result is a Pattern, output as gram; otherwise format as value
+              case val of
+                VPattern pat -> putStr (patternToGram pat)
+                _ -> putStrLn (formatValue val)
+
+-- | Print usage message
+usage :: IO ()
+usage = do
+  hPutStrLn stderr "Usage: pattern-lisp [OPTIONS] [FILES...]"
+  hPutStrLn stderr ""
+  hPutStrLn stderr "Modes:"
+  hPutStrLn stderr "  No arguments: Start interactive REPL"
+  hPutStrLn stderr "  Files only: Load files, evaluate last .plisp file, output result to stdout"
+  hPutStrLn stderr "  Files + -e: Load files, evaluate expression, output result"
+  hPutStrLn stderr "  Files + -i: Load files, then start interactive REPL"
+  hPutStrLn stderr ""
+  hPutStrLn stderr "Options:"
+  hPutStrLn stderr "  -h, --help         Show this help message"
+  hPutStrLn stderr "  -i, --interactive  Force interactive mode (load files, then REPL)"
+  hPutStrLn stderr "  -e, --eval EXPR    Evaluate expression after loading files, then exit"
+  hPutStrLn stderr ""
+  hPutStrLn stderr "File types:"
+  hPutStrLn stderr "  .plisp files: Evaluated as Pattern Lisp expressions"
+  hPutStrLn stderr "  .gram files: Loaded as Pattern Subject values"
+  hPutStrLn stderr ""
+  hPutStrLn stderr "Examples:"
+  hPutStrLn stderr "  pattern-lisp                                    # Interactive REPL"
+  hPutStrLn stderr "  pattern-lisp script.plisp                       # Load script, eval, output result"
+  hPutStrLn stderr "  pattern-lisp script.plisp state.gram            # Load both, eval script, output result"
+  hPutStrLn stderr "  pattern-lisp script.plisp -i                   # Load script, then REPL"
+  hPutStrLn stderr "  pattern-lisp script.plisp -e \"(+ 1 2)\"          # Load script, eval expr, output result"
+
 -- | Main entry point
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   args <- getArgs
-  case args of
-    [] -> repl initialEnv  -- Interactive REPL
-    [filepath] -> do
-      -- Load and execute file, then exit
-      content <- readFile filepath
-      case evaluateProgram content initialEnv of
-        Left err -> do
-          hPutStrLn stderr (formatError err)
+  
+  -- Check for help flag first
+  if hasHelpFlag args
+    then usage >> exitSuccess
+    else do
+      -- Separate files from flags
+      let (files, flags) = parseArgs args
+          plispFiles = filter isPlisp files
+          gramFiles = filter isGram files
+          hasInteractive = hasInteractiveFlag args
+          hasEval = hasEvalFlag args
+      
+      case (files, hasInteractive, hasEval) of
+        -- No files: Interactive REPL
+        ([], False, False) -> repl initialEnv
+        
+        -- Both -i and -e specified: Error
+        (_, True, True) -> do
+          hPutStrLn stderr "Error: Cannot specify both -i and -e flags"
+          usage
           exitFailure
-        Right (val, _) -> do
-          putStrLn (formatValue val)
-          return ()
-    _ -> do
-      hPutStrLn stderr "Usage: pattern-lisp [file.plisp]"
-      hPutStrLn stderr "  No arguments: Start interactive REPL"
-      hPutStrLn stderr "  One argument: Execute file and print result"
-      exitFailure
+        
+        -- -i flag: Interactive mode (load files, then REPL)
+        (_, True, False) -> do
+          envResult <- processFiles files initialEnv
+          case envResult of
+            Left err -> hPutStrLn stderr (formatError err) >> exitFailure
+            Right env -> repl env
+        
+        -- -e flag: Evaluate expression (after loading files)
+        (_, _, True) -> do
+          case extractEvalExpr args of
+            Nothing -> do
+              hPutStrLn stderr "Error: -e/--eval requires an expression argument"
+              usage
+              exitFailure
+            Just exprStr -> executeWithEval args exprStr
+        
+        -- Files with no flags: Default behavior - load files, eval and exit
+        (_, False, False) -> executeFiles files

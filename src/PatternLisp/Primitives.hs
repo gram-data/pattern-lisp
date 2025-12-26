@@ -5,24 +5,25 @@
 -- * Arithmetic: +, -, *, /
 -- * Comparison: >, <, =, /=
 -- * String operations: string-append, string-length, substring
+-- * Pattern construction: pattern, pattern-with
 --
 -- The initial environment is used as the starting point for evaluation
 -- and can be extended with user-defined bindings via 'define'.
 --
 -- Example usage:
 --
--- > import Lisp.Primitives
--- > import Lisp.Eval
--- > import Lisp.Parser
+-- > import PatternLisp.Primitives
+-- > import PatternLisp.Eval
+-- > import PatternLisp.Parser
 -- >
 -- > case parseExpr "(+ 1 2)" of
 -- >   Right expr -> evalExpr expr initialEnv
 -- >   Left err -> Left err
-module Lisp.Primitives
+module PatternLisp.Primitives
   ( initialEnv
   ) where
 
-import Lisp.Syntax
+import PatternLisp.Syntax
 import qualified Data.Map as Map
 
 -- | Initial environment with all primitive functions registered.
@@ -45,5 +46,18 @@ initialEnv = Map.fromList
   , ("string-append", VPrimitive StringAppend)
   , ("string-length", VPrimitive StringLength)
   , ("substring", VPrimitive Substring)
+  , ("pattern", VPrimitive PatternCreate)
+  , ("pattern-with", VPrimitive PatternWith)
+  , ("pattern-value", VPrimitive PatternValue)
+  , ("pattern-elements", VPrimitive PatternElements)
+  , ("pattern-length", VPrimitive PatternLength)
+  , ("pattern-size", VPrimitive PatternSize)
+  , ("pattern-depth", VPrimitive PatternDepth)
+  , ("pattern-values", VPrimitive PatternValues)
+  , ("pattern-find", VPrimitive PatternFind)
+  , ("pattern-any?", VPrimitive PatternAny)
+  , ("pattern-all?", VPrimitive PatternAll)
+  , ("value-to-pattern", VPrimitive ValueToPattern)
+  , ("pattern-to-value", VPrimitive PatternToValue)
   ]
 

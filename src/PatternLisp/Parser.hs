@@ -13,16 +13,16 @@
 --
 -- Example usage:
 --
--- > import Lisp.Parser
+-- > import PatternLisp.Parser
 -- >
 -- > case parseExpr "(+ 1 2)" of
 -- >   Left (ParseError msg) -> putStrLn $ "Parse error: " ++ msg
 -- >   Right expr -> print expr
-module Lisp.Parser
+module PatternLisp.Parser
   ( parseExpr
   ) where
 
-import Lisp.Syntax
+import PatternLisp.Syntax
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L

@@ -51,6 +51,14 @@ Demonstrates conditional expressions using `if`. Shows how to use comparison ope
 
 Demonstrates local bindings with `let` and closure scoping. Shows how closures capture their lexical environment.
 
+### `pattern-basics.plisp`
+
+Demonstrates basic pattern construction and querying operations. Shows how to create patterns, extract values, and query structural properties.
+
+### `pattern-predicates.plisp`
+
+Demonstrates pattern predicate primitives (`pattern-find`, `pattern-any?`, `pattern-all?`). Shows how to search and filter patterns using predicate closures that recursively traverse pattern structures.
+
 ## Notes
 
 - All examples use `.plisp` extension to distinguish them from other Lisp implementations
