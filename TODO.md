@@ -176,7 +176,7 @@ This feature implements the core syntax conventions described in `docs/pattern-l
 
 **Label syntax** (prefix colon): `:Person`, `:Employee`
 - Labels are used for gram notation interop and type annotations
-- Support label lists: `[:Person :Employee]`
+- Support label sets: `#{:Person :Employee}`
 - **Implementation tasks**:
   - Add `Label String` variant to `Atom` type in `Syntax.hs` (optional - may be handled via gram interop only)
   - Add label parser to `Parser.hs` (recognizes `:symbol` pattern)
