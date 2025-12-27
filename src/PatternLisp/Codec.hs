@@ -330,15 +330,15 @@ valueToSubject (VKeyword name) = Subject
   , labels = Set.fromList ["Keyword"]
   , properties = Map.fromList [("name", SubjectValue.VString name)]
   }
-valueToSubject (VMap _) = Subject
+valueToSubject (VMap m) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Map"]
-  , properties = Map.empty  -- TODO: Implement map serialization in Phase 7
+  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.mapKeys (\(KeywordKey k) -> k) (Map.map (subjectToSubjectValue . valueToSubject) m)))]
   }
-valueToSubject (VSet _) = Subject
+valueToSubject (VSet s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]
-  , properties = Map.empty  -- TODO: Implement set serialization in Phase 7
+  , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . valueToSubject) (Set.toList s)))]
   }
 valueToSubject (VList vs) = Subject
   { identity = SubjectCore.Symbol ""
@@ -416,6 +416,28 @@ subjectToValue subj
       case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VBoolean b) -> Right $ VBool b
         _ -> Left $ TypeMismatch "Bool Subject missing value property" (VList [])
+  | "Keyword" `Set.member` labels subj =
+      case Map.lookup "name" (properties subj) of
+        Just (SubjectValue.VString name) -> Right $ VKeyword name
+        _ -> Left $ TypeMismatch "Keyword Subject missing name property" (VList [])
+  | "Map" `Set.member` labels subj = do
+      entriesVal <- case Map.lookup "entries" (properties subj) of
+        Just (SubjectValue.VMap m) -> Right m
+        _ -> Left $ TypeMismatch "Map Subject missing entries property" (VList [])
+      -- Convert Map String Value to Map KeywordKey Value
+      let convertEntry (k, v) = do
+            subjVal <- subjectValueToSubject v
+            val <- subjectToValue subjVal
+            Right (KeywordKey k, val)
+      entries <- mapM convertEntry (Map.toList entriesVal)
+      Right $ VMap (Map.fromList entries)
+  | "Set" `Set.member` labels subj = do
+      elementsVal <- case Map.lookup "elements" (properties subj) of
+        Just (SubjectValue.VArray vs) -> Right vs
+        _ -> Left $ TypeMismatch "Set Subject missing elements property" (VList [])
+      elementSubjects <- mapM subjectValueToSubject elementsVal
+      vals <- mapM subjectToValue elementSubjects
+      Right $ VSet (Set.fromList vals)  -- Remove duplicates
   | "List" `Set.member` labels subj = do
       elementsVal <- case Map.lookup "elements" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
@@ -521,12 +543,12 @@ valueToSubjectForGram (VKeyword name) = Subject
 valueToSubjectForGram (VMap _) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Map"]
-  , properties = Map.empty  -- TODO: Implement map serialization in Phase 7
+  , properties = Map.empty  -- Map entries are stored as pattern elements, not properties
   }
 valueToSubjectForGram (VSet _) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]
-  , properties = Map.empty  -- TODO: Implement set serialization in Phase 7
+  , properties = Map.empty  -- Set elements are stored as pattern elements, not properties
   }
 valueToSubjectForGram (VList _) = Subject
   { identity = SubjectCore.Symbol ""
@@ -553,8 +575,19 @@ valueToPatternSubjectForGram (VNumber n) = pattern $ valueToSubjectForGram (VNum
 valueToPatternSubjectForGram (VString s) = pattern $ valueToSubjectForGram (VString s)
 valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool b)
 valueToPatternSubjectForGram (VKeyword name) = pattern $ valueToSubjectForGram (VKeyword name)
-valueToPatternSubjectForGram (VMap _) = pattern $ valueToSubjectForGram (VMap Map.empty)  -- TODO: Implement in Phase 7
-valueToPatternSubjectForGram (VSet _) = pattern $ valueToSubjectForGram (VSet Set.empty)  -- TODO: Implement in Phase 7
+valueToPatternSubjectForGram (VMap m) = 
+  -- Serialize map as pattern with elements: alternating key-value pairs
+  -- Each key is a Pattern Subject with label "Keyword", each value is a Pattern Subject
+  let keyValuePairs = Map.toList m
+      keyPatterns = map (\(KeywordKey k, _) -> valueToPatternSubjectForGram (VKeyword k)) keyValuePairs
+      valuePatterns = map (\(_, v) -> valueToPatternSubjectForGram v) keyValuePairs
+      -- Interleave keys and values: [key1, value1, key2, value2, ...]
+      elements = concat $ zipWith (\k v -> [k, v]) keyPatterns valuePatterns
+  in patternWith (valueToSubjectForGram (VMap Map.empty)) elements
+valueToPatternSubjectForGram (VSet s) = 
+  -- Serialize set as pattern with elements: each element as a Pattern Subject
+  let elements = map valueToPatternSubjectForGram (Set.toList s)
+  in patternWith (valueToSubjectForGram (VSet Set.empty)) elements
 valueToPatternSubjectForGram (VList vs) = patternWith
   (valueToSubjectForGram (VList []))
   (map valueToPatternSubjectForGram vs)
@@ -573,8 +606,8 @@ valueToPatternSubjectForGramWithState (VNumber n) = return $ pattern $ valueToSu
 valueToPatternSubjectForGramWithState (VString s) = return $ pattern $ valueToSubjectForGram (VString s)
 valueToPatternSubjectForGramWithState (VBool b) = return $ pattern $ valueToSubjectForGram (VBool b)
 valueToPatternSubjectForGramWithState (VKeyword name) = return $ pattern $ valueToSubjectForGram (VKeyword name)
-valueToPatternSubjectForGramWithState (VMap _) = return $ pattern $ valueToSubjectForGram (VMap Map.empty)  -- TODO: Implement in Phase 7
-valueToPatternSubjectForGramWithState (VSet _) = return $ pattern $ valueToSubjectForGram (VSet Set.empty)  -- TODO: Implement in Phase 7
+valueToPatternSubjectForGramWithState (VMap m) = return $ valueToPatternSubjectForGram (VMap m)
+valueToPatternSubjectForGramWithState (VSet s) = return $ valueToPatternSubjectForGram (VSet s)
 valueToPatternSubjectForGramWithState (VList vs) = do
   elementPatterns <- mapM valueToPatternSubjectForGramWithState vs
   return $ patternWith
@@ -625,6 +658,34 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
         Just (SubjectValue.VBoolean b) -> Right b
         _ -> Left $ TypeMismatch "Bool pattern missing value property" (VList [])
       Right $ VBool val
+    ["Keyword"] -> do
+      name <- case Map.lookup "name" (properties subj) of
+        Just (SubjectValue.VString n) -> Right n
+        _ -> Left $ TypeMismatch "Keyword pattern missing name property" (VList [])
+      Right $ VKeyword name
+    ["Map"] -> do
+      -- Map is serialized as pattern with elements: alternating key-value pairs
+      let elements = PatternCore.elements pat
+      if odd (length elements)
+        then Left $ TypeMismatch "Map pattern must have even number of elements (key-value pairs)" (VList [])
+        else do
+          -- Deserialize alternating key-value pairs: [key1, value1, key2, value2, ...]
+          let deserializePairs [] = Right []
+              deserializePairs (keyPat:valuePat:rest) = do
+                keyVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes keyPat
+                valueVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat
+                restPairs <- deserializePairs rest
+                case keyVal of
+                  VKeyword k -> Right ((KeywordKey k, valueVal) : restPairs)
+                  _ -> Left $ TypeMismatch "Map key must be a keyword" (VList [])
+              deserializePairs _ = Left $ TypeMismatch "Map pattern elements must be in key-value pairs" (VList [])
+          entries <- deserializePairs elements
+          Right $ VMap (Map.fromList entries)
+    ["Set"] -> do
+      -- Set is serialized as pattern with elements: each element as a Pattern Subject
+      let elements = PatternCore.elements pat
+      vals <- mapM (patternSubjectToValueWithScopeMap scopeMap resolvingScopes) elements
+      Right $ VSet (Set.fromList vals)  -- Remove duplicates
     ["List"] -> do
       let elements = PatternCore.elements pat
       vals <- mapM (patternSubjectToValueWithScopeMap scopeMap resolvingScopes) elements

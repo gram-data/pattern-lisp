@@ -201,21 +201,21 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T078 [P] Test keyword serialization in `test/PatternLisp/CodecSpec.hs` - keyword serializes and deserializes correctly
-- [ ] T079 [P] Test map serialization in `test/PatternLisp/CodecSpec.hs` - map serializes and deserializes with keyword keys preserved
-- [ ] T080 [P] Test set serialization in `test/PatternLisp/CodecSpec.hs` - set serializes and deserializes correctly
-- [ ] T081 [P] Test round-trip serialization in `test/PatternLisp/CodecSpec.hs` - keywords, maps, sets preserve types through serialization
+- [x] T078 [P] Test keyword serialization in `test/PatternLisp/CodecSpec.hs` - keyword serializes and deserializes correctly
+- [x] T079 [P] Test map serialization in `test/PatternLisp/CodecSpec.hs` - map serializes and deserializes with keyword keys preserved
+- [x] T080 [P] Test set serialization in `test/PatternLisp/CodecSpec.hs` - set serializes and deserializes correctly
+- [x] T081 [P] Test round-trip serialization in `test/PatternLisp/CodecSpec.hs` - keywords, maps, sets preserve types through serialization
 
 ### Implementation for Serialization
 
-- [ ] T082 Implement keyword serialization in `src/PatternLisp/Codec.hs` - convert `VKeyword` to `VString` with marker (or `VTaggedString`)
-- [ ] T083 Implement keyword deserialization in `src/PatternLisp/Codec.hs` - detect marker and reconstruct `VKeyword`
-- [ ] T084 Implement map serialization in `src/PatternLisp/Codec.hs` - convert `Map VKeyword Value` to `Map String Value` (keywords → strings)
-- [ ] T085 Implement map deserialization in `src/PatternLisp/Codec.hs` - convert `Map String Value` to `Map VKeyword Value` (strings → keywords, validate)
-- [ ] T086 Implement set serialization in `src/PatternLisp/Codec.hs` - convert `Set Value` to `VArray [Value]` (set → list → array)
-- [ ] T087 Implement set deserialization in `src/PatternLisp/Codec.hs` - convert `VArray [Value]` to `Set Value` (array → list → set, remove duplicates)
-- [ ] T088 Update `valueToSubjectForGram` in `src/PatternLisp/Codec.hs` - handle keywords, maps, sets
-- [ ] T089 Update `valueToPatternSubjectForGram` in `src/PatternLisp/Codec.hs` - handle keywords, maps, sets
+- [x] T082 Implement keyword serialization in `src/PatternLisp/Codec.hs` - keywords serialize as Pattern Subject with label "Keyword" and property "name"
+- [x] T083 Implement keyword deserialization in `src/PatternLisp/Codec.hs` - detect "Keyword" label and reconstruct `VKeyword` from "name" property
+- [x] T084 Implement map serialization in `src/PatternLisp/Codec.hs` - maps serialize as Pattern Subject with label "Map" and alternating key-value elements
+- [x] T085 Implement map deserialization in `src/PatternLisp/Codec.hs` - deserialize alternating key-value pairs from pattern elements, convert string keys to `KeywordKey`
+- [x] T086 Implement set serialization in `src/PatternLisp/Codec.hs` - sets serialize as Pattern Subject with label "Set" and elements as pattern elements
+- [x] T087 Implement set deserialization in `src/PatternLisp/Codec.hs` - deserialize elements from pattern elements, remove duplicates using `Set.fromList`
+- [x] T088 Update `valueToSubjectForGram` in `src/PatternLisp/Codec.hs` - handle keywords, maps, sets (maps and sets use empty properties, elements stored as pattern elements)
+- [x] T089 Update `valueToPatternSubjectForGram` in `src/PatternLisp/Codec.hs` - handle keywords, maps, sets (maps use alternating key-value pattern elements, sets use element pattern elements)
 
 **Checkpoint**: Serialization complete - keywords, maps, and sets can be serialized and deserialized with type preservation.
 

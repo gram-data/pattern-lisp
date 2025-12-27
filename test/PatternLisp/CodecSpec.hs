@@ -183,6 +183,77 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
             result <- runRoundTripValue patternVal
             if result then return () else fail "Round-trip failed: values not equal"
   
+  describe "Keywords, Maps, and Sets serialization" $ do
+    it "round-trip keywords" $ do
+      let val = VKeyword "name"
+      result <- runRoundTripValue val
+      if result then return () else fail "Round-trip failed: keyword values not equal"
+    
+    it "round-trip maps" $ do
+      let val = VMap $ Map.fromList [(KeywordKey "name", VString (T.pack "Alice")), (KeywordKey "age", VNumber 30)]
+      result <- runRoundTripValue val
+      if result then return () else fail "Round-trip failed: map values not equal"
+    
+    it "round-trip sets" $ do
+      let val = VSet $ Set.fromList [VNumber 1, VNumber 2, VNumber 3]
+      result <- runRoundTripValue val
+      if result then return () else fail "Round-trip failed: set values not equal"
+    
+    it "round-trip nested maps and sets" $ do
+      let val = VMap $ Map.fromList 
+            [ (KeywordKey "labels", VSet $ Set.fromList [VString (T.pack "Person"), VString (T.pack "Employee")])
+            , (KeywordKey "data", VMap $ Map.fromList [(KeywordKey "count", VNumber 42)])
+            ]
+      result <- runRoundTripValue val
+      if result then return () else fail "Round-trip failed: nested map/set values not equal"
+    
+    it "round-trip preserves keyword types" $ do
+      -- Test that keywords remain keywords after round-trip
+      let val = VKeyword "test-keyword"
+          pat = valueToPatternSubjectForGram val
+          gramText = patternToGram pat
+      val' <- case gramToPattern gramText of
+        Left parseErr -> fail $ "Parse error: " ++ show parseErr
+        Right pat' -> case patternSubjectToValue pat' of
+          Left err' -> fail $ "Deserialization failed: " ++ show err'
+          Right v -> return v
+      case val' of
+        VKeyword name -> name `shouldBe` "test-keyword"
+        _ -> fail $ "Expected VKeyword, got: " ++ show val'
+    
+    it "round-trip preserves map structure with keyword keys" $ do
+      -- Test that maps preserve keyword keys after round-trip
+      let val = VMap $ Map.fromList [(KeywordKey "key1", VNumber 1), (KeywordKey "key2", VString (T.pack "value"))]
+          pat = valueToPatternSubjectForGram val
+          gramText = patternToGram pat
+      val' <- case gramToPattern gramText of
+        Left parseErr -> fail $ "Parse error: " ++ show parseErr
+        Right pat' -> case patternSubjectToValue pat' of
+          Left err' -> fail $ "Deserialization failed: " ++ show err'
+          Right v -> return v
+      case val' of
+        VMap m -> do
+          Map.lookup (KeywordKey "key1") m `shouldBe` Just (VNumber 1)
+          Map.lookup (KeywordKey "key2") m `shouldBe` Just (VString (T.pack "value"))
+        _ -> fail $ "Expected VMap, got: " ++ show val'
+    
+    it "round-trip preserves set uniqueness" $ do
+      -- Test that sets remove duplicates after round-trip
+      let val = VSet $ Set.fromList [VNumber 1, VNumber 2, VNumber 1]  -- Duplicate 1
+          pat = valueToPatternSubjectForGram val
+          gramText = patternToGram pat
+      val' <- case gramToPattern gramText of
+        Left parseErr -> fail $ "Parse error: " ++ show parseErr
+        Right pat' -> case patternSubjectToValue pat' of
+          Left err' -> fail $ "Deserialization failed: " ++ show err'
+          Right v -> return v
+      case val' of
+        VSet s -> do
+          Set.size s `shouldBe` 2  -- Duplicate removed
+          Set.member (VNumber 1) s `shouldBe` True
+          Set.member (VNumber 2) s `shouldBe` True
+        _ -> fail $ "Expected VSet, got: " ++ show val'
+  
   describe "Expression serialization" $ do
     it "exprToSubject and subjectToExpr round-trip" $ do
       -- Test various expression forms
