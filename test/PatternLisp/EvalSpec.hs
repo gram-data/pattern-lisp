@@ -209,6 +209,18 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
                 Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
                 Map.lookup (KeyKeyword (KeywordKey "age")) m `shouldBe` Just (VNumber 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "duplicate keys: last value wins {name: \"Alice\" name: \"Bob\"}" $ do
+      case parseExpr "{name: \"Alice\" name: \"Bob\"}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 1
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Bob"))  -- Last value wins
+              _ -> fail $ "Expected VMap, got: " ++ show val
   
   describe "Subject Labels as String Sets" $ do
     it "creates Subject label set #{\"Person\" \"Employee\"}" $ do

@@ -115,11 +115,15 @@ instance Ord Value where
   compare (VList _) _ = LT
   compare _ (VList _) = GT
   
-  compare (VPattern _) (VPattern _) = EQ  -- Patterns not fully orderable
+  compare (VPattern p1) (VPattern p2)
+    | VPattern p1 == VPattern p2 = EQ  -- If equal, return EQ (Ord contract)
+    | otherwise = compare (show p1) (show p2)  -- Otherwise, consistent ordering by Show
   compare (VPattern _) _ = LT
   compare _ (VPattern _) = GT
   
-  compare (VClosure _) (VClosure _) = EQ  -- Closures not fully orderable
+  compare (VClosure c1) (VClosure c2)
+    | VClosure c1 == VClosure c2 = EQ  -- If equal, return EQ (Ord contract)
+    | otherwise = compare (show c1) (show c2)  -- Otherwise, consistent ordering by Show
   compare (VClosure _) _ = LT
   compare _ (VClosure _) = GT
   

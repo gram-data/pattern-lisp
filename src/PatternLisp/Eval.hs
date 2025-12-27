@@ -103,17 +103,17 @@ eval (SetLiteral exprs) = do
 eval (MapLiteral pairs) = do
   -- Pairs is a list of alternating [key, value, key, value, ...]
   -- We need to process them in pairs and handle duplicate keys (last wins)
-  let processPairs :: [Expr] -> EvalM (Map.Map MapKey Value)
-      processPairs [] = return Map.empty
-      processPairs (k:v:rest) = do
+  -- Process left-to-right so that later keys overwrite earlier ones
+  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+      processPairs acc [] = return acc
+      processPairs acc (k:v:rest) = do
         keyVal <- eval k
         valVal <- eval v
-        restMap <- processPairs rest
         case valueToMapKey keyVal of
-          Right mapKey -> return $ Map.insert mapKey valVal restMap
+          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
           Left err -> throwError err
-      processPairs _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
-  m <- processPairs pairs
+      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+  m <- processPairs Map.empty pairs
   return $ VMap m
 eval (List []) = return $ VList []
 eval (List (Atom (Symbol "lambda"):rest)) = evalLambda rest
@@ -379,15 +379,15 @@ applyPrimitive MapUpdate args = case args of
 applyPrimitive HashMap args
   | even (length args) = do
       -- Process alternating keyword-value or string-value pairs
-      let processPairs :: [Value] -> EvalM (Map.Map MapKey Value)
-          processPairs [] = return Map.empty
-          processPairs (keyVal:val:rest) = do
-            restMap <- processPairs rest
+      -- Process left-to-right so that later keys overwrite earlier ones
+      let processPairs :: Map.Map MapKey Value -> [Value] -> EvalM (Map.Map MapKey Value)
+          processPairs acc [] = return acc
+          processPairs acc (keyVal:val:rest) = do
             case valueToMapKey keyVal of
-              Right mapKey -> return $ Map.insert mapKey val restMap
+              Right mapKey -> processPairs (Map.insert mapKey val acc) rest
               Left err -> throwError err
-          processPairs _ = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
-      m <- processPairs args
+          processPairs _ _ = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
+      m <- processPairs Map.empty args
       return $ VMap m
   | otherwise = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
 
@@ -544,16 +544,17 @@ exprToValue (SetLiteral exprs) = do
   return $ VSet (Set.fromList vals)
 exprToValue (MapLiteral pairs) = do
   -- Process pairs: [key, value, key, value, ...]
-  let processPairs [] = return Map.empty
-      processPairs (k:v:rest) = do
+  -- Process left-to-right so that later keys overwrite earlier ones
+  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+      processPairs acc [] = return acc
+      processPairs acc (k:v:rest) = do
         keyVal <- exprToValue k
         valVal <- exprToValue v
-        restMap <- processPairs rest
         case valueToMapKey keyVal of
-          Right mapKey -> return $ Map.insert mapKey valVal restMap
+          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
           Left err -> throwError err
-      processPairs _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
-  m <- processPairs pairs
+      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+  m <- processPairs Map.empty pairs
   return $ VMap m
 exprToValue (Quote expr) = exprToValue expr
 
