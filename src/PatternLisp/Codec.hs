@@ -330,11 +330,15 @@ valueToSubject (VKeyword name) = Subject
   , labels = Set.fromList ["Keyword"]
   , properties = Map.fromList [("name", SubjectValue.VString name)]
   }
-valueToSubject (VMap m) = Subject
-  { identity = SubjectCore.Symbol ""
-  , labels = Set.fromList ["Map"]
-  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.mapKeys (\(KeywordKey k) -> k) (Map.map (subjectToSubjectValue . valueToSubject) m)))]
-  }
+valueToSubject (VMap m) =
+  let convertedValues = Map.map (subjectToSubjectValue . valueToSubject) m
+      convertedKeys = Map.mapKeys (\(KeywordKey k) -> k) convertedValues
+      serializedEntries = SubjectValue.VMap convertedKeys
+  in Subject
+    { identity = SubjectCore.Symbol ""
+    , labels = Set.fromList ["Map"]
+    , properties = Map.fromList [("entries", serializedEntries)]
+    }
 valueToSubject (VSet s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]
