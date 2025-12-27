@@ -123,17 +123,25 @@ Sets are unordered collections of unique elements.
 
 ## Subject Labels
 
-Subject labels are sets of strings (used in gram patterns).
+Subject labels in gram patterns are represented as `Set String`. In Pattern Lisp, you can create sets of strings to represent Subject labels:
 
 ```lisp
-;; Create label set
+;; Create a set of labels
 #{"Person" "Employee"}  ;; => set of strings
 
-;; Use in gram patterns
-(gram/node 'a #{"Person" "Employee"} {name: "Alice"})
+;; Check membership
+(contains? #{"Person" "Employee"} "Person")  ;; => true
+
+;; Subject labels are Set String, matching the set representation
+;; When creating gram patterns, labels are automatically handled as sets
 ```
 
-**Note**: Prefix colon syntax (`:Person`) is optional and deferred. Use plain strings in sets for now.
+**Key Points**:
+- Subject labels are `Set String` (unordered, unique strings)
+- Plain strings in sets (`#{"Person" "Employee"}`) are sufficient
+- Sets automatically handle duplicates and are unordered
+- Labels work seamlessly with gram pattern serialization
+- Prefix colon syntax (`:Person`) is optional and deferred - use plain strings for now
 
 ---
 

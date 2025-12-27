@@ -209,4 +209,25 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
                 Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
                 Map.lookup (KeywordKey "age") m `shouldBe` Just (VNumber 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
+  
+  describe "Subject Labels as String Sets" $ do
+    it "creates Subject label set #{\"Person\" \"Employee\"}" $ do
+      case parseExpr "#{\"Person\" \"Employee\"}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 2
+                Set.member (VString (T.pack "Person")) s `shouldBe` True
+                Set.member (VString (T.pack "Employee")) s `shouldBe` True
+              _ -> fail $ "Expected VSet of strings, got: " ++ show val
+    
+    it "checks Subject label set membership (contains? #{\"Person\" \"Employee\"} \"Person\")" $ do
+      case parseExpr "(contains? #{\"Person\" \"Employee\"} \"Person\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
 

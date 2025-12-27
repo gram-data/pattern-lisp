@@ -180,14 +180,14 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T073 [P] [US4] Test Subject label set creation in `test/PatternLisp/EvalSpec.hs` - `#{"Person" "Employee"}` creates set of strings
-- [ ] T074 [P] [US4] Test Subject label set membership in `test/PatternLisp/EvalSpec.hs` - `(contains? #{"Person" "Employee"} "Person")` returns `true`
-- [ ] T075 [P] [US4] Test gram interop with Subject labels in `test/PatternLisp/GramSpec.hs` - string sets can be used directly for gram pattern Subject labels
+- [x] T073 [P] [US4] Test Subject label set creation in `test/PatternLisp/EvalSpec.hs` - `#{"Person" "Employee"}` creates set of strings
+- [x] T074 [P] [US4] Test Subject label set membership in `test/PatternLisp/EvalSpec.hs` - `(contains? #{"Person" "Employee"} "Person")` returns `true`
+- [x] T075 [P] [US4] Test gram interop with Subject labels in `test/PatternLisp/GramSpec.hs` - string sets can be used directly for gram pattern Subject labels
 
 ### Implementation for User Story 4
 
-- [ ] T076 [US4] Add integration test for gram pattern with Subject labels in `test/PatternLisp/GramSpec.hs` - verify `Set String` works with gram patterns
-- [ ] T077 [US4] Document Subject label usage in examples or documentation
+- [x] T076 [US4] Add integration test for gram pattern with Subject labels in `test/PatternLisp/GramSpec.hs` - verify `Set String` works with gram patterns (tested round-trip serialization)
+- [x] T077 [US4] Document Subject label usage in examples or documentation (added to quickstart.md)
 
 **Checkpoint**: At this point, User Story 4 should be fully functional. Subject labels work as string sets for gram interop.
 
