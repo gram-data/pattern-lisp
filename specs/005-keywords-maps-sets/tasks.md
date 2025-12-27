@@ -85,35 +85,35 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T018 [P] [US3] Test set literal parsing in `test/PatternLisp/ParserSpec.hs` - parse `#{1 2 3}` as set literal
-- [ ] T019 [P] [US3] Test set evaluation in `test/PatternLisp/EvalSpec.hs` - `#{1 2 3}` evaluates to `VSet` with correct elements
-- [ ] T020 [P] [US3] Test duplicate removal in `test/PatternLisp/EvalSpec.hs` - `#{1 2 2 3}` removes duplicates
-- [ ] T021 [P] [US3] Test `contains?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(contains? #{1 2 3} 2)` returns `true`
-- [ ] T022 [P] [US3] Test `set-union` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-union #{1 2} #{2 3})` returns `#{1 2 3}`
-- [ ] T023 [P] [US3] Test `set-intersection` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-intersection #{1 2 3} #{2 3 4})` returns `#{2 3}`
-- [ ] T024 [P] [US3] Test `set-difference` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-difference #{1 2 3} #{2})` returns `#{1 3}`
-- [ ] T025 [P] [US3] Test `set-symmetric-difference` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-symmetric-difference #{1 2} #{2 3})` returns `#{1 3}`
-- [ ] T026 [P] [US3] Test `set-subset?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-subset? #{1 2} #{1 2 3})` returns `true`
-- [ ] T027 [P] [US3] Test `set-equal?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-equal? #{1 2 3} #{3 2 1})` returns `true`
-- [ ] T028 [P] [US3] Test `empty?` primitive for sets in `test/PatternLisp/PrimitivesSpec.hs` - `(empty? #{})` returns `true`
-- [ ] T029 [P] [US3] Test `hash-set` constructor in `test/PatternLisp/PrimitivesSpec.hs` - `(hash-set 1 2 3)` creates set equivalent to `#{1 2 3}`
+- [x] T018 [P] [US3] Test set literal parsing in `test/PatternLisp/ParserSpec.hs` - parse `#{1 2 3}` as set literal
+- [x] T019 [P] [US3] Test set evaluation in `test/PatternLisp/EvalSpec.hs` - `#{1 2 3}` evaluates to `VSet` with correct elements
+- [x] T020 [P] [US3] Test duplicate removal in `test/PatternLisp/EvalSpec.hs` - `#{1 2 2 3}` removes duplicates
+- [x] T021 [P] [US3] Test `contains?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(contains? #{1 2 3} 2)` returns `true`
+- [x] T022 [P] [US3] Test `set-union` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-union #{1 2} #{2 3})` returns `#{1 2 3}`
+- [x] T023 [P] [US3] Test `set-intersection` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-intersection #{1 2 3} #{2 3 4})` returns `#{2 3}`
+- [x] T024 [P] [US3] Test `set-difference` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-difference #{1 2 3} #{2})` returns `#{1 3}`
+- [x] T025 [P] [US3] Test `set-symmetric-difference` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-symmetric-difference #{1 2} #{2 3})` returns `#{1 3}`
+- [x] T026 [P] [US3] Test `set-subset?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-subset? #{1 2} #{1 2 3})` returns `true`
+- [x] T027 [P] [US3] Test `set-equal?` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(set-equal? #{1 2 3} #{3 2 1})` returns `true`
+- [x] T028 [P] [US3] Test `empty?` primitive for sets in `test/PatternLisp/PrimitivesSpec.hs` - `(empty? #{})` returns `true`
+- [x] T029 [P] [US3] Test `hash-set` constructor in `test/PatternLisp/PrimitivesSpec.hs` - `(hash-set 1 2 3)` creates set equivalent to `#{1 2 3}`
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Add set operation primitives to `Primitive` type in `src/PatternLisp/Syntax.hs` - `SetContains`, `SetUnion`, `SetIntersection`, `SetDifference`, `SetSymmetricDifference`, `SetSubset`, `SetEqual`, `SetEmpty`, `HashSet`
-- [ ] T031 [US3] Implement set literal parser in `src/PatternLisp/Parser.hs` - recognize `#{...}` syntax with whitespace handling
-- [ ] T032 [US3] Implement set literal evaluation in `src/PatternLisp/Eval.hs` - evaluate set literal to `VSet` with duplicates removed
-- [ ] T033 [US3] Implement `contains?` primitive for sets in `src/PatternLisp/Eval.hs` - check membership using `Set.member`
-- [ ] T034 [US3] Implement `set-union` primitive in `src/PatternLisp/Eval.hs` - use `Set.union`
-- [ ] T035 [US3] Implement `set-intersection` primitive in `src/PatternLisp/Eval.hs` - use `Set.intersection`
-- [ ] T036 [US3] Implement `set-difference` primitive in `src/PatternLisp/Eval.hs` - use `Set.difference`
-- [ ] T037 [US3] Implement `set-symmetric-difference` primitive in `src/PatternLisp/Eval.hs` - use `Set.union (Set.difference s1 s2) (Set.difference s2 s1)`
-- [ ] T038 [US3] Implement `set-subset?` primitive in `src/PatternLisp/Eval.hs` - use `Set.isSubsetOf`
-- [ ] T039 [US3] Implement `set-equal?` primitive in `src/PatternLisp/Eval.hs` - use `Set.fromList` and compare (order doesn't matter)
-- [ ] T040 [US3] Implement `empty?` primitive for sets in `src/PatternLisp/Eval.hs` - use `Set.null`
-- [ ] T041 [US3] Implement `hash-set` constructor in `src/PatternLisp/Eval.hs` - create set from variable arguments
-- [ ] T042 [US3] Add set operation primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` - register all set primitives
-- [ ] T043 [US3] Add `primitiveName` cases for set primitives in `src/PatternLisp/Syntax.hs` - string names for serialization
+- [x] T030 [US3] Add set operation primitives to `Primitive` type in `src/PatternLisp/Syntax.hs` - `SetContains`, `SetUnion`, `SetIntersection`, `SetDifference`, `SetSymmetricDifference`, `SetSubset`, `SetEqual`, `SetEmpty`, `HashSet`
+- [x] T031 [US3] Implement set literal parser in `src/PatternLisp/Parser.hs` - recognize `#{...}` syntax with whitespace handling (added `SetLiteral` to Expr and `setParser`)
+- [x] T032 [US3] Implement set literal evaluation in `src/PatternLisp/Eval.hs` - evaluate set literal to `VSet` with duplicates removed (using `Set.fromList`)
+- [x] T033 [US3] Implement `contains?` primitive for sets in `src/PatternLisp/Eval.hs` - check membership using `Set.member`
+- [x] T034 [US3] Implement `set-union` primitive in `src/PatternLisp/Eval.hs` - use `Set.union`
+- [x] T035 [US3] Implement `set-intersection` primitive in `src/PatternLisp/Eval.hs` - use `Set.intersection`
+- [x] T036 [US3] Implement `set-difference` primitive in `src/PatternLisp/Eval.hs` - use `Set.difference`
+- [x] T037 [US3] Implement `set-symmetric-difference` primitive in `src/PatternLisp/Eval.hs` - use `Set.union (Set.difference s1 s2) (Set.difference s2 s1)`
+- [x] T038 [US3] Implement `set-subset?` primitive in `src/PatternLisp/Eval.hs` - use `Set.isSubsetOf`
+- [x] T039 [US3] Implement `set-equal?` primitive in `src/PatternLisp/Eval.hs` - use `Set.fromList` and compare (order doesn't matter) - using `==` on sets
+- [x] T040 [US3] Implement `empty?` primitive for sets in `src/PatternLisp/Eval.hs` - use `Set.null`
+- [x] T041 [US3] Implement `hash-set` constructor in `src/PatternLisp/Eval.hs` - create set from variable arguments (using `Set.fromList`)
+- [x] T042 [US3] Add set operation primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` - register all set primitives
+- [x] T043 [US3] Add `primitiveName` cases for set primitives in `src/PatternLisp/Syntax.hs` - string names for serialization (also added `primitiveFromName` cases)
 
 **Checkpoint**: At this point, User Story 3 should be fully functional and testable independently. Sets can be created, manipulated, and all operations work correctly.
 

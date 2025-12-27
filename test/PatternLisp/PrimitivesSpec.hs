@@ -7,6 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import qualified Data.Text as T
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 spec :: Spec
 spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
@@ -169,4 +170,100 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Left (TypeMismatch _ _) -> True `shouldBe` True
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected TypeMismatch error"
+  
+  describe "Set operations" $ do
+    it "evaluates contains? for sets (contains? #{1 2 3} 2)" $ do
+      case parseExpr "(contains? #{1 2 3} 2)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "evaluates set-union (set-union #{1 2} #{2 3})" $ do
+      case parseExpr "(set-union #{1 2} #{2 3})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "evaluates set-intersection (set-intersection #{1 2 3} #{2 3 4})" $ do
+      case parseExpr "(set-intersection #{1 2 3} #{2 3 4})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 2
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "evaluates set-difference (set-difference #{1 2 3} #{2})" $ do
+      case parseExpr "(set-difference #{1 2 3} #{2})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 2
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "evaluates set-symmetric-difference (set-symmetric-difference #{1 2} #{2 3})" $ do
+      case parseExpr "(set-symmetric-difference #{1 2} #{2 3})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 2
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "evaluates set-subset? (set-subset? #{1 2} #{1 2 3})" $ do
+      case parseExpr "(set-subset? #{1 2} #{1 2 3})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "evaluates set-equal? (set-equal? #{1 2 3} #{3 2 1})" $ do
+      case parseExpr "(set-equal? #{1 2 3} #{3 2 1})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "evaluates empty? for sets (empty? #{})" $ do
+      case parseExpr "(empty? #{})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "evaluates hash-set constructor (hash-set 1 2 3)" $ do
+      case parseExpr "(hash-set 1 2 3)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
 

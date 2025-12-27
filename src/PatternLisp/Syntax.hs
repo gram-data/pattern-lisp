@@ -38,6 +38,7 @@ import Pattern (Pattern)
 data Expr
   = Atom Atom          -- ^ Symbols, numbers, strings, booleans
   | List [Expr]        -- ^ S-expressions (function calls, special forms)
+  | SetLiteral [Expr]  -- ^ Set literals #{...}
   | Quote Expr         -- ^ Quoted expressions (prevent evaluation)
   deriving (Eq, Show)
 
@@ -139,6 +140,16 @@ data Primitive
   -- Pattern conversion
   | ValueToPattern     -- ^ (value-to-pattern v): convert any value to pattern
   | PatternToValue     -- ^ (pattern-to-value p): convert pattern to value
+  -- Set operations
+  | SetContains        -- ^ (contains? set value): check membership
+  | SetUnion          -- ^ (set-union set1 set2): union of two sets
+  | SetIntersection   -- ^ (set-intersection set1 set2): intersection of two sets
+  | SetDifference     -- ^ (set-difference set1 set2): elements in set1 not in set2
+  | SetSymmetricDifference  -- ^ (set-symmetric-difference set1 set2): elements in either but not both
+  | SetSubset         -- ^ (set-subset? set1 set2): check if set1 is subset of set2
+  | SetEqual          -- ^ (set-equal? set1 set2): check if sets are equal
+  | SetEmpty          -- ^ (empty? set): check if set is empty
+  | HashSet           -- ^ (hash-set ...): create set from arguments
   deriving (Eq, Show, Ord)
 
 -- | Environment mapping variable names to values
@@ -179,6 +190,15 @@ primitiveName PatternAny = "pattern-any?"
 primitiveName PatternAll = "pattern-all?"
 primitiveName ValueToPattern = "value-to-pattern"
 primitiveName PatternToValue = "pattern-to-value"
+primitiveName SetContains = "contains?"
+primitiveName SetUnion = "set-union"
+primitiveName SetIntersection = "set-intersection"
+primitiveName SetDifference = "set-difference"
+primitiveName SetSymmetricDifference = "set-symmetric-difference"
+primitiveName SetSubset = "set-subset?"
+primitiveName SetEqual = "set-equal?"
+primitiveName SetEmpty = "empty?"
+primitiveName HashSet = "hash-set"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -206,5 +226,14 @@ primitiveFromName "pattern-any?" = Just PatternAny
 primitiveFromName "pattern-all?" = Just PatternAll
 primitiveFromName "value-to-pattern" = Just ValueToPattern
 primitiveFromName "pattern-to-value" = Just PatternToValue
+primitiveFromName "contains?" = Just SetContains
+primitiveFromName "set-union" = Just SetUnion
+primitiveFromName "set-intersection" = Just SetIntersection
+primitiveFromName "set-difference" = Just SetDifference
+primitiveFromName "set-symmetric-difference" = Just SetSymmetricDifference
+primitiveFromName "set-subset?" = Just SetSubset
+primitiveFromName "set-equal?" = Just SetEqual
+primitiveFromName "empty?" = Just SetEmpty
+primitiveFromName "hash-set" = Just HashSet
 primitiveFromName _ = Nothing
 

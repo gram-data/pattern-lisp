@@ -59,4 +59,9 @@ spec = describe "PatternLisp.Parser" $ do
       parseExpr "name:" `shouldBe` Right (Atom (Keyword "name"))
       parseExpr "age:" `shouldBe` Right (Atom (Keyword "age"))
       parseExpr "on-success:" `shouldBe` Right (Atom (Keyword "on-success"))
+    
+    it "parses set literals with hash set syntax" $ do
+      parseExpr "#{1 2 3}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)])
+      parseExpr "#{}" `shouldBe` Right (SetLiteral [])
+      parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String (T.pack "hello")), Atom (Bool True)])
 

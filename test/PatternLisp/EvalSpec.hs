@@ -7,6 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import qualified Data.Text as T
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 spec :: Spec
 spec = describe "PatternLisp.Eval - Core Language Forms" $ do
@@ -164,4 +165,33 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
             -- Keyword should evaluate to itself, not lookup "name" in environment
             Left err -> fail $ "Eval error: " ++ show err
             Right val -> val `shouldBe` VKeyword "name"  -- Should be keyword, not "Alice"
+  
+  describe "Sets" $ do
+    it "evaluates set literal #{1 2 3}" $ do
+      case parseExpr "#{1 2 3}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "removes duplicates from set literal #{1 2 2 3}" $ do
+      case parseExpr "#{1 2 2 3}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3  -- Duplicates removed
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
 

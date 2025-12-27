@@ -55,7 +55,7 @@ parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
 
 -- | Main expression parser (recursive)
 exprParser :: Parser Expr
-exprParser = skipSpace *> (quoteParser <|> atomParser <|> listParser) <* skipSpace
+exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> listParser) <* skipSpace
 
 -- | Atom parser (keyword, symbol, number, string, bool)
 -- Try keywords before symbols to catch postfix colon syntax
@@ -101,6 +101,16 @@ stringParser = String . T.pack <$> (char '"' *> manyTill stringChar (char '"'))
 -- | Boolean parser (#t, #f)
 boolParser :: Parser Atom
 boolParser = (string "#t" *> pure (Bool True)) <|> (string "#f" *> pure (Bool False))
+
+-- | Set parser (hash set syntax #{...})
+setParser :: Parser Expr
+setParser = do
+  _ <- string "#{"
+  skipSpace
+  exprs <- many (exprParser <* skipSpace)
+  skipSpace
+  _ <- char '}'
+  return $ SetLiteral exprs
 
 -- | List parser (parentheses)
 listParser :: Parser Expr

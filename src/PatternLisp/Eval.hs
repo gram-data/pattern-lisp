@@ -32,6 +32,7 @@ import Pattern (Pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Control.Monad.Reader
 import Control.Monad.Except
 import qualified Data.Text as T
@@ -90,6 +91,9 @@ evalWithEnv expr = do
 -- | Main evaluation function
 eval :: Expr -> EvalM Value
 eval (Atom atom) = evalAtom atom
+eval (SetLiteral exprs) = do
+  vals <- mapM eval exprs
+  return $ VSet (Set.fromList vals)  -- Remove duplicates automatically
 eval (List []) = return $ VList []
 eval (List (Atom (Symbol "lambda"):rest)) = evalLambda rest
 eval (List (Atom (Symbol "if"):rest)) = evalIf rest
@@ -253,6 +257,46 @@ applyPrimitive PatternToValue args = case args of
   [VPattern pat] -> evalPatternToValue pat
   [v] -> throwError $ TypeMismatch ("pattern-to-value expects pattern, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "pattern-to-value" 1 (length args)
+-- Set operation primitives
+applyPrimitive SetContains args = case args of
+  [VSet s, val] -> return $ VBool (Set.member val s)
+  [v, _] -> throwError $ TypeMismatch ("contains? expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "contains?" 2 (length args)
+applyPrimitive SetUnion args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.union s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-union expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-union expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-union" 2 (length args)
+applyPrimitive SetIntersection args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.intersection s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-intersection expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-intersection expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-intersection" 2 (length args)
+applyPrimitive SetDifference args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.difference s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-difference expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-difference expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-difference" 2 (length args)
+applyPrimitive SetSymmetricDifference args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.union (Set.difference s1 s2) (Set.difference s2 s1))
+  [VSet _, v] -> throwError $ TypeMismatch ("set-symmetric-difference expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-symmetric-difference expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-symmetric-difference" 2 (length args)
+applyPrimitive SetSubset args = case args of
+  [VSet s1, VSet s2] -> return $ VBool (Set.isSubsetOf s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-subset? expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-subset? expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-subset?" 2 (length args)
+applyPrimitive SetEqual args = case args of
+  [VSet s1, VSet s2] -> return $ VBool (s1 == s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-equal? expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-equal? expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-equal?" 2 (length args)
+applyPrimitive SetEmpty args = case args of
+  [VSet s] -> return $ VBool (Set.null s)
+  [v] -> throwError $ TypeMismatch ("empty? expects set, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "empty?" 1 (length args)
+applyPrimitive HashSet args = return $ VSet (Set.fromList args)
 
 -- | Apply a closure (extend captured environment with arguments)
 applyClosure :: Closure -> [Value] -> EvalM Value
@@ -402,6 +446,9 @@ exprToValue (Atom (Symbol name)) = return $ VString (T.pack name)
 exprToValue (List exprs) = do
   vals <- mapM exprToValue exprs
   return $ VList vals
+exprToValue (SetLiteral exprs) = do
+  vals <- mapM exprToValue exprs
+  return $ VSet (Set.fromList vals)
 exprToValue (Quote expr) = exprToValue expr
 
 -- | Evaluate lambda form: (lambda (params...) body)
