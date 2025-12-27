@@ -54,4 +54,9 @@ spec = describe "PatternLisp.Parser" $ do
     it "parses booleans (#t, #f)" $ do
       parseExpr "#t" `shouldBe` Right (Atom (Bool True))
       parseExpr "#f" `shouldBe` Right (Atom (Bool False))
+    
+    it "parses keywords with postfix colon syntax" $ do
+      parseExpr "name:" `shouldBe` Right (Atom (Keyword "name"))
+      parseExpr "age:" `shouldBe` Right (Atom (Keyword "age"))
+      parseExpr "on-success:" `shouldBe` Right (Atom (Keyword "on-success"))
 

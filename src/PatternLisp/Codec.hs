@@ -238,6 +238,11 @@ exprToSubject (Atom (Bool b)) = Subject
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
   }
+exprToSubject (Atom (Keyword name)) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Keyword"]
+  , properties = Map.fromList [("name", SubjectValue.VString name)]
+  }
 exprToSubject (List exprs) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["List"]
@@ -309,6 +314,21 @@ valueToSubject (VBool b) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
+  }
+valueToSubject (VKeyword name) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Keyword"]
+  , properties = Map.fromList [("name", SubjectValue.VString name)]
+  }
+valueToSubject (VMap _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Map"]
+  , properties = Map.empty  -- TODO: Implement map serialization in Phase 7
+  }
+valueToSubject (VSet _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Set"]
+  , properties = Map.empty  -- TODO: Implement set serialization in Phase 7
   }
 valueToSubject (VList vs) = Subject
   { identity = SubjectCore.Symbol ""
@@ -483,6 +503,21 @@ valueToSubjectForGram (VBool b) = Subject
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
   }
+valueToSubjectForGram (VKeyword name) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Keyword"]
+  , properties = Map.fromList [("name", SubjectValue.VString name)]
+  }
+valueToSubjectForGram (VMap _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Map"]
+  , properties = Map.empty  -- TODO: Implement map serialization in Phase 7
+  }
+valueToSubjectForGram (VSet _) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Set"]
+  , properties = Map.empty  -- TODO: Implement set serialization in Phase 7
+  }
 valueToSubjectForGram (VList _) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["List"]
@@ -507,6 +542,9 @@ valueToPatternSubjectForGram :: Value -> Pattern Subject
 valueToPatternSubjectForGram (VNumber n) = pattern $ valueToSubjectForGram (VNumber n)
 valueToPatternSubjectForGram (VString s) = pattern $ valueToSubjectForGram (VString s)
 valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGram (VKeyword name) = pattern $ valueToSubjectForGram (VKeyword name)
+valueToPatternSubjectForGram (VMap _) = pattern $ valueToSubjectForGram (VMap Map.empty)  -- TODO: Implement in Phase 7
+valueToPatternSubjectForGram (VSet _) = pattern $ valueToSubjectForGram (VSet Set.empty)  -- TODO: Implement in Phase 7
 valueToPatternSubjectForGram (VList vs) = patternWith
   (valueToSubjectForGram (VList []))
   (map valueToPatternSubjectForGram vs)
@@ -524,6 +562,9 @@ valueToPatternSubjectForGramWithState :: Value -> ScopeIdState (Pattern Subject)
 valueToPatternSubjectForGramWithState (VNumber n) = return $ pattern $ valueToSubjectForGram (VNumber n)
 valueToPatternSubjectForGramWithState (VString s) = return $ pattern $ valueToSubjectForGram (VString s)
 valueToPatternSubjectForGramWithState (VBool b) = return $ pattern $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGramWithState (VKeyword name) = return $ pattern $ valueToSubjectForGram (VKeyword name)
+valueToPatternSubjectForGramWithState (VMap _) = return $ pattern $ valueToSubjectForGram (VMap Map.empty)  -- TODO: Implement in Phase 7
+valueToPatternSubjectForGramWithState (VSet _) = return $ pattern $ valueToSubjectForGram (VSet Set.empty)  -- TODO: Implement in Phase 7
 valueToPatternSubjectForGramWithState (VList vs) = do
   elementPatterns <- mapM valueToPatternSubjectForGramWithState vs
   return $ patternWith

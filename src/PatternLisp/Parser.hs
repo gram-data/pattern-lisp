@@ -57,15 +57,25 @@ parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
 exprParser :: Parser Expr
 exprParser = skipSpace *> (quoteParser <|> atomParser <|> listParser) <* skipSpace
 
--- | Atom parser (symbol, number, string, bool)
--- Try symbols before numbers to catch operators like + and -
+-- | Atom parser (keyword, symbol, number, string, bool)
+-- Try keywords before symbols to catch postfix colon syntax
 atomParser :: Parser Expr
-atomParser = Atom <$> (stringParser <|> boolParser <|> try symbolParser <|> numberParser)
+atomParser = Atom <$> (stringParser <|> boolParser <|> try keywordParser <|> try symbolParser <|> numberParser)
+
+-- | Keyword parser (symbol followed by colon)
+-- Keywords use postfix colon syntax: name:, age:, etc.
+keywordParser :: Parser Atom
+keywordParser = Keyword <$> (identifier <* char ':')
+  where
+    identifier = (:) <$> firstChar <*> many restChar
+    firstChar = letterChar <|> satisfy (\c -> c `elem` ("!$%&*+-./<=>?@^_~" :: String))
+    restChar = firstChar <|> digitChar
 
 -- | Symbol parser (valid identifiers)
 -- Note: Does not match if it looks like a number (starts with + or - followed by digit)
+-- Note: Does not match keywords (symbols ending with colon)
 symbolParser :: Parser Atom
-symbolParser = Symbol <$> (try (notFollowedBy numberLike) *> identifier)
+symbolParser = Symbol <$> (try (notFollowedBy numberLike) *> try (notFollowedBy (identifier <* char ':')) *> identifier)
   where
     identifier = (:) <$> firstChar <*> many restChar
     firstChar = letterChar <|> satisfy (\c -> c `elem` ("!$%&*+-./:<=>?@^_~" :: String))

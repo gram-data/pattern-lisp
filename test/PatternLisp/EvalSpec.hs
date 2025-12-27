@@ -137,4 +137,31 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VNumber 15
+  
+  describe "Keywords" $ do
+    it "evaluates keyword to itself without environment lookup" $ do
+      case parseExpr "name:" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VKeyword "name"
+    
+    it "evaluates keyword comparison (= name: name:)" $ do
+      case parseExpr "(= name: name:)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "keywords are distinct from symbols (type error if used as symbol)" $ do
+      -- Try to use keyword as a variable name (should fail)
+      case parseExpr "name:" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> do
+          -- Create an environment where "name" is defined
+          let envWithName = Map.insert "name" (VString (T.pack "Alice")) initialEnv
+          case evalExpr expr envWithName of
+            -- Keyword should evaluate to itself, not lookup "name" in environment
+            Left err -> fail $ "Eval error: " ++ show err
+            Right val -> val `shouldBe` VKeyword "name"  -- Should be keyword, not "Alice"
 

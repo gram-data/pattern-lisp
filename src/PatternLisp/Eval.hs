@@ -108,6 +108,7 @@ evalAtom :: Atom -> EvalM Value
 evalAtom (Number n) = return $ VNumber n
 evalAtom (String s) = return $ VString s
 evalAtom (Bool b) = return $ VBool b
+evalAtom (Keyword name) = return $ VKeyword name  -- Keywords are self-evaluating, no environment lookup
 evalAtom (Symbol name) = do
   currentEnv <- ask
   case Map.lookup name currentEnv of
@@ -169,10 +170,7 @@ applyPrimitive Lt args = case args of
     return $ VBool (nx < ny)
   _ -> throwError $ ArityMismatch "<" 2 (length args)
 applyPrimitive Eq args = case args of
-  [x, y] -> do
-    nx <- expectNumber x
-    ny <- expectNumber y
-    return $ VBool (nx == ny)
+  [x, y] -> return $ VBool (x == y)  -- Use Eq instance for Value (handles all types including keywords)
   _ -> throwError $ ArityMismatch "=" 2 (length args)
 applyPrimitive Ne args = case args of
   [x, y] -> do
@@ -399,6 +397,7 @@ exprToValue :: Expr -> EvalM Value
 exprToValue (Atom (Number n)) = return $ VNumber n
 exprToValue (Atom (String s)) = return $ VString s
 exprToValue (Atom (Bool b)) = return $ VBool b
+exprToValue (Atom (Keyword name)) = return $ VKeyword name
 exprToValue (Atom (Symbol name)) = return $ VString (T.pack name)
 exprToValue (List exprs) = do
   vals <- mapM exprToValue exprs
