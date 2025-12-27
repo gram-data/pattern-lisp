@@ -59,14 +59,20 @@ initialEnv = Map.fromList
   , ("pattern-all?", VPrimitive PatternAll)
   , ("value-to-pattern", VPrimitive ValueToPattern)
   , ("pattern-to-value", VPrimitive PatternToValue)
-  , ("contains?", VPrimitive SetContains)
+  , ("contains?", VPrimitive SetContains)  -- Works for both sets and maps
   , ("set-union", VPrimitive SetUnion)
   , ("set-intersection", VPrimitive SetIntersection)
   , ("set-difference", VPrimitive SetDifference)
   , ("set-symmetric-difference", VPrimitive SetSymmetricDifference)
   , ("set-subset?", VPrimitive SetSubset)
   , ("set-equal?", VPrimitive SetEqual)
-  , ("empty?", VPrimitive SetEmpty)
+  , ("empty?", VPrimitive SetEmpty)  -- Works for both sets and maps
   , ("hash-set", VPrimitive HashSet)
+  , ("get", VPrimitive MapGet)
+  , ("get-in", VPrimitive MapGetIn)
+  , ("assoc", VPrimitive MapAssoc)
+  , ("dissoc", VPrimitive MapDissoc)
+  , ("update", VPrimitive MapUpdate)
+  , ("hash-map", VPrimitive HashMap)
   ]
 

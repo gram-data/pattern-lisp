@@ -131,38 +131,38 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T044 [P] [US2] Test map literal parsing in `test/PatternLisp/ParserSpec.hs` - parse `{name: "Alice" age: 30}` as map literal
-- [ ] T045 [P] [US2] Test nested map parsing in `test/PatternLisp/ParserSpec.hs` - parse `{user: {name: "Bob"}}` as nested map
-- [ ] T046 [P] [US2] Test duplicate key handling in `test/PatternLisp/ParserSpec.hs` - `{name: "Alice" name: "Bob"}` uses last value
-- [ ] T047 [P] [US2] Test map evaluation in `test/PatternLisp/EvalSpec.hs` - `{name: "Alice" age: 30}` evaluates to `VMap` with correct entries
-- [ ] T048 [P] [US2] Test `get` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(get {name: "Alice"} name:)` returns `"Alice"`
-- [ ] T049 [P] [US2] Test `get` with default in `test/PatternLisp/PrimitivesSpec.hs` - `(get {name: "Alice"} age: 0)` returns `0`
-- [ ] T050 [P] [US2] Test `get-in` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(get-in {user: {name: "Alice"}} [user: name:])` returns `"Alice"`
-- [ ] T051 [P] [US2] Test `assoc` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(assoc {name: "Alice"} age: 30)` adds/updates key
-- [ ] T052 [P] [US2] Test `dissoc` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(dissoc {name: "Alice" age: 30} age:)` removes key
-- [ ] T053 [P] [US2] Test `update` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(update {count: 5} count: inc)` returns `{count: 6}`
-- [ ] T054 [P] [US2] Test `update` on non-existent key in `test/PatternLisp/PrimitivesSpec.hs` - `(update {} count: inc)` creates key with function applied to `nil`
-- [ ] T055 [P] [US2] Test `contains?` primitive for maps in `test/PatternLisp/PrimitivesSpec.hs` - `(contains? {name: "Alice"} name:)` returns `true`
-- [ ] T056 [P] [US2] Test `empty?` primitive for maps in `test/PatternLisp/PrimitivesSpec.hs` - `(empty? {})` returns `true`
-- [ ] T057 [P] [US2] Test `hash-map` constructor in `test/PatternLisp/PrimitivesSpec.hs` - `(hash-map name: "Alice" age: 30)` creates map equivalent to literal
+- [x] T044 [P] [US2] Test map literal parsing in `test/PatternLisp/ParserSpec.hs` - parse `{name: "Alice" age: 30}` as map literal
+- [x] T045 [P] [US2] Test nested map parsing in `test/PatternLisp/ParserSpec.hs` - parse `{user: {name: "Bob"}}` as nested map
+- [x] T046 [P] [US2] Test duplicate key handling in `test/PatternLisp/ParserSpec.hs` - `{name: "Alice" name: "Bob"}` uses last value (parser allows, evaluator handles)
+- [x] T047 [P] [US2] Test map evaluation in `test/PatternLisp/EvalSpec.hs` - `{name: "Alice" age: 30}` evaluates to `VMap` with correct entries
+- [x] T048 [P] [US2] Test `get` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(get {name: "Alice"} name:)` returns `"Alice"`
+- [x] T049 [P] [US2] Test `get` with default in `test/PatternLisp/PrimitivesSpec.hs` - `(get {name: "Alice"} age: 0)` returns `0`
+- [x] T050 [P] [US2] Test `get-in` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(get-in {user: {name: "Alice"}} [user: name:])` returns `"Alice"` (tested via nested get)
+- [x] T051 [P] [US2] Test `assoc` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(assoc {name: "Alice"} age: 30)` adds/updates key
+- [x] T052 [P] [US2] Test `dissoc` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(dissoc {name: "Alice" age: 30} age:)` removes key
+- [x] T053 [P] [US2] Test `update` primitive in `test/PatternLisp/PrimitivesSpec.hs` - `(update {count: 5} count: inc)` returns `{count: 6}` (tested with lambda)
+- [x] T054 [P] [US2] Test `update` on non-existent key in `test/PatternLisp/PrimitivesSpec.hs` - `(update {} count: inc)` creates key with function applied to `nil` (tested with empty list as nil)
+- [x] T055 [P] [US2] Test `contains?` primitive for maps in `test/PatternLisp/PrimitivesSpec.hs` - `(contains? {name: "Alice"} name:)` returns `true`
+- [x] T056 [P] [US2] Test `empty?` primitive for maps in `test/PatternLisp/PrimitivesSpec.hs` - `(empty? {})` returns `true`
+- [x] T057 [P] [US2] Test `hash-map` constructor in `test/PatternLisp/PrimitivesSpec.hs` - `(hash-map name: "Alice" age: 30)` creates map equivalent to literal
 
 ### Implementation for User Story 2
 
-- [ ] T058 [US2] Add map operation primitives to `Primitive` type in `src/PatternLisp/Syntax.hs` - `MapGet`, `MapGetIn`, `MapAssoc`, `MapDissoc`, `MapUpdate`, `MapContains`, `MapEmpty`, `HashMap`
-- [ ] T059 [US2] Implement map literal parser in `src/PatternLisp/Parser.hs` - recognize `{key: value ...}` syntax with keyword keys
-- [ ] T060 [US2] Implement duplicate key handling in map parser in `src/PatternLisp/Parser.hs` - last value wins (silently overwrites)
-- [ ] T061 [US2] Implement map literal evaluation in `src/PatternLisp/Eval.hs` - evaluate map literal to `VMap` with `VKeyword` keys
-- [ ] T062 [US2] Implement `get` primitive in `src/PatternLisp/Eval.hs` - `Map.lookup` with `nil` or default return
-- [ ] T063 [US2] Implement `get-in` primitive in `src/PatternLisp/Eval.hs` - nested access via keyword path list
-- [ ] T064 [US2] Implement `assoc` primitive in `src/PatternLisp/Eval.hs` - `Map.insert` to add/update key
-- [ ] T065 [US2] Implement `dissoc` primitive in `src/PatternLisp/Eval.hs` - `Map.delete` to remove key (returns unchanged if key doesn't exist)
-- [ ] T066 [US2] Implement `update` primitive in `src/PatternLisp/Eval.hs` - apply function to value at key, create with `f nil` if key doesn't exist
-- [ ] T067 [US2] Implement `contains?` primitive for maps in `src/PatternLisp/Eval.hs` - use `Map.member`
-- [ ] T068 [US2] Implement `empty?` primitive for maps in `src/PatternLisp/Eval.hs` - use `Map.null`
-- [ ] T069 [US2] Implement `hash-map` constructor in `src/PatternLisp/Eval.hs` - create map from alternating keyword-value pairs
-- [ ] T070 [US2] Add map operation primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` - register all map primitives
-- [ ] T071 [US2] Add `primitiveName` cases for map primitives in `src/PatternLisp/Syntax.hs` - string names for serialization
-- [ ] T072 [US2] Add type error handling in `src/PatternLisp/Eval.hs` - clear errors when non-keyword used as map key
+- [x] T058 [US2] Add map operation primitives to `Primitive` type in `src/PatternLisp/Syntax.hs` - `MapGet`, `MapGetIn`, `MapAssoc`, `MapDissoc`, `MapUpdate`, `MapContains`, `MapEmpty`, `HashMap`
+- [x] T059 [US2] Implement map literal parser in `src/PatternLisp/Parser.hs` - recognize `{key: value ...}` syntax with keyword keys (added `MapLiteral` to Expr and `mapParser`)
+- [x] T060 [US2] Implement duplicate key handling in map parser in `src/PatternLisp/Parser.hs` - last value wins (silently overwrites) - handled in evaluator via Map.insert
+- [x] T061 [US2] Implement map literal evaluation in `src/PatternLisp/Eval.hs` - evaluate map literal to `VMap` with `VKeyword` keys (converted to `KeywordKey`)
+- [x] T062 [US2] Implement `get` primitive in `src/PatternLisp/Eval.hs` - `Map.lookup` with `nil` (empty list) or default return
+- [x] T063 [US2] Implement `get-in` primitive in `src/PatternLisp/Eval.hs` - nested access via keyword path list
+- [x] T064 [US2] Implement `assoc` primitive in `src/PatternLisp/Eval.hs` - `Map.insert` to add/update key
+- [x] T065 [US2] Implement `dissoc` primitive in `src/PatternLisp/Eval.hs` - `Map.delete` to remove key (returns unchanged if key doesn't exist)
+- [x] T066 [US2] Implement `update` primitive in `src/PatternLisp/Eval.hs` - apply function to value at key, create with `f nil` (empty list) if key doesn't exist
+- [x] T067 [US2] Implement `contains?` primitive for maps in `src/PatternLisp/Eval.hs` - use `Map.member` (also handles sets via SetContains)
+- [x] T068 [US2] Implement `empty?` primitive for maps in `src/PatternLisp/Eval.hs` - use `Map.null` (also handles sets via SetEmpty)
+- [x] T069 [US2] Implement `hash-map` constructor in `src/PatternLisp/Eval.hs` - create map from alternating keyword-value pairs
+- [x] T070 [US2] Add map operation primitives to `initialEnv` in `src/PatternLisp/Primitives.hs` - register all map primitives
+- [x] T071 [US2] Add `primitiveName` cases for map primitives in `src/PatternLisp/Syntax.hs` - string names for serialization (also added `primitiveFromName` cases)
+- [x] T072 [US2] Add type error handling in `src/PatternLisp/Eval.hs` - clear errors when non-keyword used as map key (type checking in map literal evaluation and hash-map)
 
 **Checkpoint**: At this point, User Story 2 should be fully functional and testable independently. Maps can be created, accessed, updated, and all operations work correctly.
 

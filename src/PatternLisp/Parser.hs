@@ -55,7 +55,7 @@ parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
 
 -- | Main expression parser (recursive)
 exprParser :: Parser Expr
-exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> listParser) <* skipSpace
+exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> try mapParser <|> listParser) <* skipSpace
 
 -- | Atom parser (keyword, symbol, number, string, bool)
 -- Try keywords before symbols to catch postfix colon syntax
@@ -111,6 +111,23 @@ setParser = do
   skipSpace
   _ <- char '}'
   return $ SetLiteral exprs
+
+-- | Map parser (curly brace syntax {key: value ...})
+-- Maps use alternating key-value pairs where keys must be keywords
+mapParser :: Parser Expr
+mapParser = do
+  _ <- char '{'
+  skipSpace
+  pairs <- many (mapPair <* skipSpace)
+  skipSpace
+  _ <- char '}'
+  return $ MapLiteral (concat pairs)  -- Flatten pairs into single list
+  where
+    mapPair = do
+      key <- keywordParser  -- Key must be a keyword
+      skipSpace
+      value <- exprParser
+      return [Atom key, value]
 
 -- | List parser (parentheses)
 listParser :: Parser Expr

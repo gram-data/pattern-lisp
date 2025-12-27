@@ -64,4 +64,15 @@ spec = describe "PatternLisp.Parser" $ do
       parseExpr "#{1 2 3}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)])
       parseExpr "#{}" `shouldBe` Right (SetLiteral [])
       parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String (T.pack "hello")), Atom (Bool True)])
+    
+    it "parses map literals with curly brace syntax" $ do
+      parseExpr "{name: \"Alice\" age: 30}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "age"), Atom (Number 30)])
+      parseExpr "{}" `shouldBe` Right (MapLiteral [])
+    
+    it "parses nested maps" $ do
+      parseExpr "{user: {name: \"Bob\"}}" `shouldBe` Right (MapLiteral [Atom (Keyword "user"), MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Bob"))]])
+    
+    it "handles duplicate keys in map literals (last value wins)" $ do
+      -- Parser allows duplicate keys; evaluator handles them (last wins)
+      parseExpr "{name: \"Alice\" name: \"Bob\"}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "name"), Atom (String (T.pack "Bob"))])
 

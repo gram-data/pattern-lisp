@@ -39,6 +39,7 @@ data Expr
   = Atom Atom          -- ^ Symbols, numbers, strings, booleans
   | List [Expr]        -- ^ S-expressions (function calls, special forms)
   | SetLiteral [Expr]  -- ^ Set literals #{...}
+  | MapLiteral [Expr]  -- ^ Map literals {key: value ...} (alternating key-value pairs)
   | Quote Expr         -- ^ Quoted expressions (prevent evaluation)
   deriving (Eq, Show)
 
@@ -150,6 +151,15 @@ data Primitive
   | SetEqual          -- ^ (set-equal? set1 set2): check if sets are equal
   | SetEmpty          -- ^ (empty? set): check if set is empty
   | HashSet           -- ^ (hash-set ...): create set from arguments
+  -- Map operations
+  | MapGet            -- ^ (get map key [default]): get value at key, return default or nil if not found
+  | MapGetIn          -- ^ (get-in map [key1 key2 ...]): nested access via keyword path
+  | MapAssoc          -- ^ (assoc map key value): add/update key-value pair
+  | MapDissoc         -- ^ (dissoc map key): remove key from map
+  | MapUpdate         -- ^ (update map key f): apply function to value at key, create with f(nil) if missing
+  | MapContains       -- ^ (contains? map key): check if map contains key
+  | MapEmpty          -- ^ (empty? map): check if map is empty
+  | HashMap           -- ^ (hash-map key1 val1 key2 val2 ...): create map from alternating keyword-value pairs
   deriving (Eq, Show, Ord)
 
 -- | Environment mapping variable names to values
@@ -199,6 +209,14 @@ primitiveName SetSubset = "set-subset?"
 primitiveName SetEqual = "set-equal?"
 primitiveName SetEmpty = "empty?"
 primitiveName HashSet = "hash-set"
+primitiveName MapGet = "get"
+primitiveName MapGetIn = "get-in"
+primitiveName MapAssoc = "assoc"
+primitiveName MapDissoc = "dissoc"
+primitiveName MapUpdate = "update"
+primitiveName MapContains = "contains?"
+primitiveName MapEmpty = "empty?"
+primitiveName HashMap = "hash-map"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -233,7 +251,14 @@ primitiveFromName "set-difference" = Just SetDifference
 primitiveFromName "set-symmetric-difference" = Just SetSymmetricDifference
 primitiveFromName "set-subset?" = Just SetSubset
 primitiveFromName "set-equal?" = Just SetEqual
-primitiveFromName "empty?" = Just SetEmpty
+primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and maps
 primitiveFromName "hash-set" = Just HashSet
+primitiveFromName "get" = Just MapGet
+primitiveFromName "get-in" = Just MapGetIn
+primitiveFromName "assoc" = Just MapAssoc
+primitiveFromName "dissoc" = Just MapDissoc
+primitiveFromName "update" = Just MapUpdate
+primitiveFromName "contains?" = Just MapContains  -- Note: contains? works for both sets and maps
+primitiveFromName "hash-map" = Just HashMap
 primitiveFromName _ = Nothing
 

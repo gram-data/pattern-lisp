@@ -2,6 +2,7 @@ module PatternLisp.EvalSpec (spec) where
 
 import Test.Hspec
 import PatternLisp.Syntax
+import PatternLisp.Syntax (KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
@@ -194,4 +195,18 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
                 Set.member (VNumber 2) s `shouldBe` True
                 Set.member (VNumber 3) s `shouldBe` True
               _ -> fail $ "Expected VSet, got: " ++ show val
+  
+  describe "Maps" $ do
+    it "evaluates map literal {name: \"Alice\" age: 30}" $ do
+      case parseExpr "{name: \"Alice\" age: 30}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 2
+                Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeywordKey "age") m `shouldBe` Just (VNumber 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
 

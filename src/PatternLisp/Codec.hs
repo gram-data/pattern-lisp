@@ -248,6 +248,11 @@ exprToSubject (SetLiteral exprs) = Subject
   , labels = Set.fromList ["Set"]
   , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . exprToSubject) exprs))]
   }
+exprToSubject (MapLiteral pairs) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Map"]
+  , properties = Map.fromList [("pairs", SubjectValue.VArray (map (subjectToSubjectValue . exprToSubject) pairs))]
+  }
 exprToSubject (List exprs) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["List"]
