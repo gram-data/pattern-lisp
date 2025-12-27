@@ -3,6 +3,7 @@ module Properties (spec) where
 import Test.Hspec
 import Test.QuickCheck
 import PatternLisp.Syntax
+import PatternLisp.Syntax (MapKey(..), KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
@@ -74,7 +75,7 @@ instance Arbitrary Value where
       genMapEntry = do
         key <- genKeyword
         val <- valueGen 2  -- Limit nesting depth
-        return (KeywordKey key, val)
+        return (KeyKeyword (KeywordKey key), val)
 
 -- | Substitute a variable in an expression with a value
 substitute :: Expr -> String -> Value -> Expr
@@ -214,7 +215,7 @@ spec = describe "Property-Based Tests" $ do
                                                , Atom (Keyword keyStr)
                                                , valueToExpr val]
                                         , Atom (Keyword keyStr)]) initialEnv of
-              Right (VMap resultMap) -> Map.lookup (KeywordKey keyStr) resultMap
+              Right (VMap resultMap) -> Map.lookup (KeyKeyword (KeywordKey keyStr)) resultMap
               _ -> Nothing
         in case result of
           Just v -> v === val
@@ -228,11 +229,11 @@ spec = describe "Property-Based Tests" $ do
             keyStr = case key of
               VKeyword k -> k
               _ -> "test-key"
-            wasPresent = Map.member (KeywordKey keyStr) m'
+            wasPresent = Map.member (KeyKeyword (KeywordKey keyStr)) m'
             result = case evalExpr (List [Atom (Symbol "dissoc")
                                         , valueToExpr (VMap m')
                                         , Atom (Keyword keyStr)]) initialEnv of
-              Right (VMap resultMap) -> Map.member (KeywordKey keyStr) resultMap
+              Right (VMap resultMap) -> Map.member (KeyKeyword (KeywordKey keyStr)) resultMap
               _ -> True
         in if wasPresent
           then property (not result)  -- If key was present, it should not be after dissoc

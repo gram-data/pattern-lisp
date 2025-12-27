@@ -75,4 +75,10 @@ spec = describe "PatternLisp.Parser" $ do
     it "handles duplicate keys in map literals (last value wins)" $ do
       -- Parser allows duplicate keys; evaluator handles them (last wins)
       parseExpr "{name: \"Alice\" name: \"Bob\"}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "name"), Atom (String (T.pack "Bob"))])
+    
+    it "parses map literals with string keys" $ do
+      parseExpr "{\"name\" \"Alice\" \"age\" 30}" `shouldBe` Right (MapLiteral [Atom (String (T.pack "name")), Atom (String (T.pack "Alice")), Atom (String (T.pack "age")), Atom (Number 30)])
+    
+    it "parses map literals with mixed keyword and string keys" $ do
+      parseExpr "{name: \"Alice\" \"user-id\" 123}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (String (T.pack "user-id")), Atom (Number 123)])
 

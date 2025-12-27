@@ -2,7 +2,7 @@ module PatternLisp.EvalSpec (spec) where
 
 import Test.Hspec
 import PatternLisp.Syntax
-import PatternLisp.Syntax (KeywordKey(..))
+import PatternLisp.Syntax (MapKey(..), KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
@@ -206,8 +206,8 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
             case val of
               VMap m -> do
                 Map.size m `shouldBe` 2
-                Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
-                Map.lookup (KeywordKey "age") m `shouldBe` Just (VNumber 30)
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeyKeyword (KeywordKey "age")) m `shouldBe` Just (VNumber 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
   
   describe "Subject Labels as String Sets" $ do

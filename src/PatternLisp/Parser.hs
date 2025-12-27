@@ -113,7 +113,7 @@ setParser = do
   return $ SetLiteral exprs
 
 -- | Map parser (curly brace syntax {key: value ...})
--- Maps use alternating key-value pairs where keys must be keywords
+-- Maps use alternating key-value pairs where keys can be keywords or strings
 mapParser :: Parser Expr
 mapParser = do
   _ <- char '{'
@@ -124,8 +124,10 @@ mapParser = do
   return $ MapLiteral (concat pairs)  -- Flatten pairs into single list
   where
     mapPair = do
-      key <- keywordParser  -- Key must be a keyword
+      key <- try keywordParser <|> stringParser  -- Key can be keyword or string
       skipSpace
+      -- For string keys, no colon needed (already quoted)
+      -- For keyword keys, colon is part of the keyword syntax
       value <- exprParser
       return [Atom key, value]
 

@@ -20,6 +20,7 @@ module PatternLisp.Syntax
   , Atom(..)
   , Value(..)
   , KeywordKey(..)
+  , MapKey(..)
   , Closure(..)
   , Primitive(..)
   , Env
@@ -56,13 +57,26 @@ data Atom
 newtype KeywordKey = KeywordKey String
   deriving (Eq, Ord, Show)
 
+-- | Map key type: can be either a keyword or a string
+-- Keywords are convenient (Clojure-like), strings are flexible (JSON-like)
+data MapKey = KeyKeyword KeywordKey  -- ^ Keyword key (name:)
+            | KeyString String       -- ^ String key ("name")
+  deriving (Eq, Show)
+
+-- | Ord instance for MapKey: keywords sort before strings, then by value
+instance Ord MapKey where
+  compare (KeyKeyword (KeywordKey k1)) (KeyKeyword (KeywordKey k2)) = compare k1 k2
+  compare (KeyString s1) (KeyString s2) = compare s1 s2
+  compare (KeyKeyword _) (KeyString _) = LT  -- Keywords sort before strings
+  compare (KeyString _) (KeyKeyword _) = GT
+
 -- | Runtime values that expressions evaluate to
 data Value
   = VNumber Integer           -- ^ Numeric values
   | VString Text              -- ^ String values
   | VBool Bool                -- ^ Boolean values
   | VKeyword String           -- ^ Keyword values (self-evaluating)
-  | VMap (Map.Map KeywordKey Value)  -- ^ Map values with keyword keys
+  | VMap (Map.Map MapKey Value)  -- ^ Map values with keyword or string keys
   | VSet (Set.Set Value)      -- ^ Set values (unordered, unique elements)
   | VList [Value]             -- ^ List values
   | VPattern (Pattern Subject)  -- ^ Pattern values with Subject decoration
@@ -89,7 +103,7 @@ instance Ord Value where
   compare (VKeyword _) _ = LT
   compare _ (VKeyword _) = GT
   
-  compare (VMap a) (VMap b) = compare (Map.toList a) (Map.toList b)
+  compare (VMap a) (VMap b) = compare (Map.toAscList a) (Map.toAscList b)
   compare (VMap _) _ = LT
   compare _ (VMap _) = GT
   

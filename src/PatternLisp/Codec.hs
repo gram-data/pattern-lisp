@@ -330,15 +330,15 @@ valueToSubject (VKeyword name) = Subject
   , labels = Set.fromList ["Keyword"]
   , properties = Map.fromList [("name", SubjectValue.VString name)]
   }
-valueToSubject (VMap m) =
-  let convertedValues = Map.map (subjectToSubjectValue . valueToSubject) m
-      convertedKeys = Map.mapKeys (\(KeywordKey k) -> k) convertedValues
-      serializedEntries = SubjectValue.VMap convertedKeys
-  in Subject
-    { identity = SubjectCore.Symbol ""
-    , labels = Set.fromList ["Map"]
-    , properties = Map.fromList [("entries", serializedEntries)]
-    }
+valueToSubject (VMap m) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Map"]
+  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.mapKeys mapKeyToString (Map.map (subjectToSubjectValue . valueToSubject) m)))]
+  }
+  where
+    mapKeyToString :: MapKey -> String
+    mapKeyToString (KeyKeyword (KeywordKey k)) = k
+    mapKeyToString (KeyString s) = s
 valueToSubject (VSet s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]
@@ -428,11 +428,17 @@ subjectToValue subj
       entriesVal <- case Map.lookup "entries" (properties subj) of
         Just (SubjectValue.VMap m) -> Right m
         _ -> Left $ TypeMismatch "Map Subject missing entries property" (VList [])
-      -- Convert Map String Value to Map KeywordKey Value
+      -- Convert Map String Value to Map MapKey Value
+      -- Prefer keywords for simple identifiers, use strings otherwise
       let convertEntry (k, v) = do
             subjVal <- subjectValueToSubject v
             val <- subjectToValue subjVal
-            Right (KeywordKey k, val)
+            -- Prefer keyword if it's a valid identifier (simple heuristic)
+            let mapKey = if isValidIdentifier k then KeyKeyword (KeywordKey k) else KeyString k
+            Right (mapKey, val)
+          isValidIdentifier s = case s of
+            [] -> False
+            (c:_) -> all (\ch -> ch `elem` (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-_")) s && not (c `elem` ['0'..'9'])
       entries <- mapM convertEntry (Map.toList entriesVal)
       Right $ VMap (Map.fromList entries)
   | "Set" `Set.member` labels subj = do
@@ -581,9 +587,12 @@ valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool 
 valueToPatternSubjectForGram (VKeyword name) = pattern $ valueToSubjectForGram (VKeyword name)
 valueToPatternSubjectForGram (VMap m) = 
   -- Serialize map as pattern with elements: alternating key-value pairs
-  -- Each key is a Pattern Subject with label "Keyword", each value is a Pattern Subject
+  -- Keys can be keywords or strings, each serialized appropriately
   let keyValuePairs = Map.toList m
-      keyPatterns = map (\(KeywordKey k, _) -> valueToPatternSubjectForGram (VKeyword k)) keyValuePairs
+      keyPatterns = map (\(mapKey, _) -> case mapKey of
+        KeyKeyword (KeywordKey k) -> valueToPatternSubjectForGram (VKeyword k)
+        KeyString s -> valueToPatternSubjectForGram (VString (T.pack s))
+        ) keyValuePairs
       valuePatterns = map (\(_, v) -> valueToPatternSubjectForGram v) keyValuePairs
       -- Interleave keys and values: [key1, value1, key2, value2, ...]
       elements = concat $ zipWith (\k v -> [k, v]) keyPatterns valuePatterns
@@ -679,9 +688,12 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
                 keyVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes keyPat
                 valueVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat
                 restPairs <- deserializePairs rest
-                case keyVal of
-                  VKeyword k -> Right ((KeywordKey k, valueVal) : restPairs)
-                  _ -> Left $ TypeMismatch "Map key must be a keyword" (VList [])
+                -- Keys can be keywords or strings
+                let mapKey = case keyVal of
+                      VKeyword k -> KeyKeyword (KeywordKey k)
+                      VString s -> KeyString (T.unpack s)
+                      _ -> error $ "Map key must be keyword or string, got: " ++ show keyVal
+                Right ((mapKey, valueVal) : restPairs)
               deserializePairs _ = Left $ TypeMismatch "Map pattern elements must be in key-value pairs" (VList [])
           entries <- deserializePairs elements
           Right $ VMap (Map.fromList entries)

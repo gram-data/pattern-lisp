@@ -90,6 +90,12 @@ evalWithEnv expr = do
 
 -- | Main evaluation function
 eval :: Expr -> EvalM Value
+-- | Convert a Value to a MapKey (keyword or string)
+valueToMapKey :: Value -> Either Error MapKey
+valueToMapKey (VKeyword name) = Right $ KeyKeyword (KeywordKey name)
+valueToMapKey (VString s) = Right $ KeyString (T.unpack s)
+valueToMapKey v = Left $ TypeMismatch ("Map keys must be keywords or strings, got: " ++ show v) v
+
 eval (Atom atom) = evalAtom atom
 eval (SetLiteral exprs) = do
   vals <- mapM eval exprs
@@ -97,15 +103,15 @@ eval (SetLiteral exprs) = do
 eval (MapLiteral pairs) = do
   -- Pairs is a list of alternating [key, value, key, value, ...]
   -- We need to process them in pairs and handle duplicate keys (last wins)
-  let processPairs :: [Expr] -> EvalM (Map.Map KeywordKey Value)
+  let processPairs :: [Expr] -> EvalM (Map.Map MapKey Value)
       processPairs [] = return Map.empty
       processPairs (k:v:rest) = do
         keyVal <- eval k
         valVal <- eval v
         restMap <- processPairs rest
-        case keyVal of
-          VKeyword name -> return $ Map.insert (KeywordKey name) valVal restMap
-          _ -> throwError $ TypeMismatch ("Map keys must be keywords, got: " ++ show keyVal) keyVal
+        case valueToMapKey keyVal of
+          Right mapKey -> return $ Map.insert mapKey valVal restMap
+          Left err -> throwError err
       processPairs _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
   m <- processPairs pairs
   return $ VMap m
@@ -275,8 +281,9 @@ applyPrimitive PatternToValue args = case args of
 -- Set operation primitives
 applyPrimitive SetContains args = case args of
   [VSet s, val] -> return $ VBool (Set.member val s)
-  [VMap m, VKeyword key] -> return $ VBool (Map.member (KeywordKey key) m)  -- Also handle maps
-  [VMap _, v] -> throwError $ TypeMismatch ("contains? expects keyword as second argument for maps, but got: " ++ show v) v
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VBool (Map.member mapKey m)  -- Also handle maps
+    Left err -> throwError err
   [v, _] -> throwError $ TypeMismatch ("contains? expects set or map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "contains?" 2 (length args)
 applyPrimitive SetUnion args = case args of
@@ -317,61 +324,69 @@ applyPrimitive SetEmpty args = case args of
 applyPrimitive HashSet args = return $ VSet (Set.fromList args)
 -- Map operation primitives
 applyPrimitive MapGet args = case args of
-  [VMap m, VKeyword key] -> return $ case Map.lookup (KeywordKey key) m of
-    Just val -> val
-    Nothing -> VList []  -- Return empty list as nil
-  [VMap m, VKeyword key, defaultVal] -> return $ Map.findWithDefault defaultVal (KeywordKey key) m
-  [VMap _, v, _] -> throwError $ TypeMismatch ("get expects keyword as second argument, but got: " ++ show v) v
-  [VMap _, v] -> throwError $ TypeMismatch ("get expects keyword as second argument, but got: " ++ show v) v
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ case Map.lookup mapKey m of
+      Just val -> val
+      Nothing -> VList []  -- Return empty list as nil
+    Left err -> throwError err
+  [VMap m, keyVal, defaultVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ Map.findWithDefault defaultVal mapKey m
+    Left err -> throwError err
   [v, _] -> throwError $ TypeMismatch ("get expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "get" 2 (length args)
 applyPrimitive MapGetIn args = case args of
   [VMap m, VList keys] -> do
-    -- keys is a list of keywords: [key1, key2, ...]
-    let getInPath :: Map.Map KeywordKey Value -> [Value] -> EvalM Value
+    -- keys is a list of keywords or strings: [key1, key2, ...]
+    let getInPath :: Map.Map MapKey Value -> [Value] -> EvalM Value
         getInPath _ [] = return $ VList []  -- Return nil if path exhausted
-        getInPath currentMap (VKeyword key:rest) = do
-          case Map.lookup (KeywordKey key) currentMap of
-            Just (VMap nestedMap) | null rest -> return $ VMap nestedMap  -- Path ends at map, return it
-            Just (VMap nestedMap) -> getInPath nestedMap rest  -- Continue path into nested map
-            Just val | null rest -> return val  -- Path ends at non-map value, return it
-            Just _ -> return $ VList []  -- Path doesn't lead to map, return nil
-            Nothing -> return $ VList []  -- Key not found, return nil
-        getInPath _ (v:_) = throwError $ TypeMismatch ("get-in path must contain keywords, got: " ++ show v) v
+        getInPath currentMap (keyVal:rest) = do
+          case valueToMapKey keyVal of
+            Right mapKey -> case Map.lookup mapKey currentMap of
+              Just (VMap nestedMap) | null rest -> return $ VMap nestedMap  -- Path ends at map, return it
+              Just (VMap nestedMap) -> getInPath nestedMap rest  -- Continue path into nested map
+              Just val | null rest -> return val  -- Path ends at non-map value, return it
+              Just _ -> return $ VList []  -- Path doesn't lead to map, return nil
+              Nothing -> return $ VList []  -- Key not found, return nil
+            Left err -> throwError err
     getInPath m keys
-  [VMap _, v] -> throwError $ TypeMismatch ("get-in expects list of keywords as second argument, but got: " ++ show v) v
+  [VMap _, v] -> throwError $ TypeMismatch ("get-in expects list of keywords or strings as second argument, but got: " ++ show v) v
   [v, _] -> throwError $ TypeMismatch ("get-in expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "get-in" 2 (length args)
 applyPrimitive MapAssoc args = case args of
-  [VMap m, VKeyword key, val] -> return $ VMap (Map.insert (KeywordKey key) val m)
-  [VMap _, v, _] -> throwError $ TypeMismatch ("assoc expects keyword as second argument, but got: " ++ show v) v
+  [VMap m, keyVal, val] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VMap (Map.insert mapKey val m)
+    Left err -> throwError err
   [v, _, _] -> throwError $ TypeMismatch ("assoc expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "assoc" 3 (length args)
 applyPrimitive MapDissoc args = case args of
-  [VMap m, VKeyword key] -> return $ VMap (Map.delete (KeywordKey key) m)
-  [VMap _, v] -> throwError $ TypeMismatch ("dissoc expects keyword as second argument, but got: " ++ show v) v
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VMap (Map.delete mapKey m)
+    Left err -> throwError err
   [v, _] -> throwError $ TypeMismatch ("dissoc expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "dissoc" 2 (length args)
 applyPrimitive MapUpdate args = case args of
-  [VMap m, VKeyword key, VClosure closure] -> do
-    -- Get current value or nil (empty list)
-    let currentVal = Map.findWithDefault (VList []) (KeywordKey key) m
-    -- Apply function to current value
-    updatedVal <- applyClosure closure [currentVal]
-    return $ VMap (Map.insert (KeywordKey key) updatedVal m)
-  [VMap _, VKeyword _, v] -> throwError $ TypeMismatch ("update expects closure as third argument, but got: " ++ show v) v
-  [VMap _, v, _] -> throwError $ TypeMismatch ("update expects keyword as second argument, but got: " ++ show v) v
+  [VMap m, keyVal, VClosure closure] -> case valueToMapKey keyVal of
+    Right mapKey -> do
+      -- Get current value or nil (empty list)
+      let currentVal = Map.findWithDefault (VList []) mapKey m
+      -- Apply function to current value
+      updatedVal <- applyClosure closure [currentVal]
+      return $ VMap (Map.insert mapKey updatedVal m)
+    Left err -> throwError err
+  [VMap _, _, v] -> throwError $ TypeMismatch ("update expects closure as third argument, but got: " ++ show v) v
   [v, _, _] -> throwError $ TypeMismatch ("update expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "update" 3 (length args)
 applyPrimitive HashMap args
   | even (length args) = do
-      -- Process alternating keyword-value pairs
-      let processPairs :: [Value] -> EvalM (Map.Map KeywordKey Value)
+      -- Process alternating keyword-value or string-value pairs
+      let processPairs :: [Value] -> EvalM (Map.Map MapKey Value)
           processPairs [] = return Map.empty
-          processPairs (VKeyword key:val:rest) = do
+          processPairs (keyVal:val:rest) = do
             restMap <- processPairs rest
-            return $ Map.insert (KeywordKey key) val restMap
-          processPairs (v:_) = throwError $ TypeMismatch ("hash-map keys must be keywords, got: " ++ show v) v
+            case valueToMapKey keyVal of
+              Right mapKey -> return $ Map.insert mapKey val restMap
+              Left err -> throwError err
+          processPairs _ = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
       m <- processPairs args
       return $ VMap m
   | otherwise = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
@@ -534,9 +549,9 @@ exprToValue (MapLiteral pairs) = do
         keyVal <- exprToValue k
         valVal <- exprToValue v
         restMap <- processPairs rest
-        case keyVal of
-          VKeyword name -> return $ Map.insert (KeywordKey name) valVal restMap
-          _ -> throwError $ TypeMismatch ("Map keys must be keywords, got: " ++ show keyVal) keyVal
+        case valueToMapKey keyVal of
+          Right mapKey -> return $ Map.insert mapKey valVal restMap
+          Left err -> throwError err
       processPairs _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
   m <- processPairs pairs
   return $ VMap m

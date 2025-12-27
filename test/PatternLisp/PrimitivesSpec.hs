@@ -2,6 +2,7 @@ module PatternLisp.PrimitivesSpec (spec) where
 
 import Test.Hspec
 import PatternLisp.Syntax
+import PatternLisp.Syntax (MapKey(..), KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
@@ -293,7 +294,7 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right val -> do
             case val of
               VMap nestedMap -> do
-                Map.lookup (KeywordKey "name") nestedMap `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeyKeyword (KeywordKey "name")) nestedMap `shouldBe` Just (VString (T.pack "Alice"))
               _ -> fail $ "Expected nested map, got: " ++ show val
     
     it "get-in returns map when path ends at map (get-in {a: {b: 42}} (quote (a:)))" $ do
@@ -305,7 +306,7 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right val -> do
             case val of
               VMap nestedMap -> do
-                Map.lookup (KeywordKey "b") nestedMap `shouldBe` Just (VNumber 42)
+                Map.lookup (KeyKeyword (KeywordKey "b")) nestedMap `shouldBe` Just (VNumber 42)
               _ -> fail $ "Expected VMap {b: 42}, got: " ++ show val
     
     it "evaluates assoc primitive (assoc {name: \"Alice\"} age: 30)" $ do
@@ -316,8 +317,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right val -> do
             case val of
               VMap m -> do
-                Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
-                Map.lookup (KeywordKey "age") m `shouldBe` Just (VNumber 30)
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeyKeyword (KeywordKey "age")) m `shouldBe` Just (VNumber 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
     
     it "evaluates dissoc primitive (dissoc {name: \"Alice\" age: 30} age:)" $ do
@@ -328,8 +329,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right val -> do
             case val of
               VMap m -> do
-                Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
-                Map.member (KeywordKey "age") m `shouldBe` False
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.member (KeyKeyword (KeywordKey "age")) m `shouldBe` False
               _ -> fail $ "Expected VMap, got: " ++ show val
     
     it "evaluates update primitive (update {count: 5} count: (lambda (x) (+ x 1)))" $ do
@@ -340,7 +341,7 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right val -> do
             case val of
               VMap m -> do
-                Map.lookup (KeywordKey "count") m `shouldBe` Just (VNumber 6)
+                Map.lookup (KeyKeyword (KeywordKey "count")) m `shouldBe` Just (VNumber 6)
               _ -> fail $ "Expected VMap, got: " ++ show val
     
     it "evaluates update on non-existent key (update {} count: (lambda (x) (if (= x ()) 0 (+ x 1))))" $ do
@@ -352,7 +353,7 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
             case val of
               VMap m -> do
                 -- Should create key with function applied to nil
-                Map.member (KeywordKey "count") m `shouldBe` True
+                Map.member (KeyKeyword (KeywordKey "count")) m `shouldBe` True
               _ -> fail $ "Expected VMap, got: " ++ show val
     
     it "evaluates contains? for maps (contains? {name: \"Alice\"} name:)" $ do
@@ -378,7 +379,7 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
             case val of
               VMap m -> do
                 Map.size m `shouldBe` 2
-                Map.lookup (KeywordKey "name") m `shouldBe` Just (VString (T.pack "Alice"))
-                Map.lookup (KeywordKey "age") m `shouldBe` Just (VNumber 30)
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeyKeyword (KeywordKey "age")) m `shouldBe` Just (VNumber 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
 

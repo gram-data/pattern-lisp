@@ -7,7 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue, exprToSubject, subjectToExpr)
 import PatternLisp.Gram (patternToGram, gramToPattern)
-import PatternLisp.Syntax (Error(..))
+import PatternLisp.Syntax (Error(..), MapKey(..), KeywordKey(..))
 import Pattern (Pattern)
 import Pattern.Core (pattern, patternWith)
 import qualified Pattern.Core as PatternCore
@@ -190,7 +190,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
       if result then return () else fail "Round-trip failed: keyword values not equal"
     
     it "round-trip maps" $ do
-      let val = VMap $ Map.fromList [(KeywordKey "name", VString (T.pack "Alice")), (KeywordKey "age", VNumber 30)]
+      let val = VMap $ Map.fromList [(KeyKeyword (KeywordKey "name"), VString (T.pack "Alice")), (KeyKeyword (KeywordKey "age"), VNumber 30)]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: map values not equal"
     
@@ -201,8 +201,8 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
     
     it "round-trip nested maps and sets" $ do
       let val = VMap $ Map.fromList 
-            [ (KeywordKey "labels", VSet $ Set.fromList [VString (T.pack "Person"), VString (T.pack "Employee")])
-            , (KeywordKey "data", VMap $ Map.fromList [(KeywordKey "count", VNumber 42)])
+            [ (KeyKeyword (KeywordKey "labels"), VSet $ Set.fromList [VString (T.pack "Person"), VString (T.pack "Employee")])
+            , (KeyKeyword (KeywordKey "data"), VMap $ Map.fromList [(KeyKeyword (KeywordKey "count"), VNumber 42)])
             ]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: nested map/set values not equal"
@@ -223,7 +223,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
     
     it "round-trip preserves map structure with keyword keys" $ do
       -- Test that maps preserve keyword keys after round-trip
-      let val = VMap $ Map.fromList [(KeywordKey "key1", VNumber 1), (KeywordKey "key2", VString (T.pack "value"))]
+      let val = VMap $ Map.fromList [(KeyKeyword (KeywordKey "key1"), VNumber 1), (KeyKeyword (KeywordKey "key2"), VString (T.pack "value"))]
           pat = valueToPatternSubjectForGram val
           gramText = patternToGram pat
       val' <- case gramToPattern gramText of
@@ -233,8 +233,8 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
           Right v -> return v
       case val' of
         VMap m -> do
-          Map.lookup (KeywordKey "key1") m `shouldBe` Just (VNumber 1)
-          Map.lookup (KeywordKey "key2") m `shouldBe` Just (VString (T.pack "value"))
+          Map.lookup (KeyKeyword (KeywordKey "key1")) m `shouldBe` Just (VNumber 1)
+          Map.lookup (KeyKeyword (KeywordKey "key2")) m `shouldBe` Just (VString (T.pack "value"))
         _ -> fail $ "Expected VMap, got: " ++ show val'
     
     it "round-trip preserves set uniqueness" $ do
