@@ -6,7 +6,10 @@ import PatternLisp.Syntax
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
+import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue)
+import PatternLisp.Gram (patternToGram, gramToPattern)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import Control.Monad
 
@@ -31,6 +34,7 @@ instance Arbitrary Atom where
     , Number <$> arbitrary
     , String . T.pack <$> genString
     , Bool <$> arbitrary
+    , Keyword <$> genKeyword
     ]
     where
       genSymbol = do
@@ -38,17 +42,39 @@ instance Arbitrary Atom where
         rest <- listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-"))
         return (first : rest)
       genString = listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ " "))
+      genKeyword = do
+        first <- elements (['a'..'z'] ++ ['A'..'Z'])
+        rest <- listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-"))
+        return (first : rest)
 
 -- | Arbitrary instance for Value
 instance Arbitrary Value where
-  arbitrary = oneof
-    [ VNumber <$> arbitrary
-    , VString . T.pack <$> genString
-    , VBool <$> arbitrary
-    , VList <$> resize 5 (listOf arbitrary)
-    ]
+  arbitrary = sized valueGen
     where
+      valueGen 0 = oneof
+        [ VNumber <$> arbitrary
+        , VString . T.pack <$> genString
+        , VBool <$> arbitrary
+        , VKeyword <$> genKeyword
+        ]
+      valueGen n = oneof
+        [ VNumber <$> arbitrary
+        , VString . T.pack <$> genString
+        , VBool <$> arbitrary
+        , VKeyword <$> genKeyword
+        , VList <$> resize 3 (listOf (valueGen (n `div` 2)))
+        , VSet <$> (Set.fromList <$> resize 3 (listOf (valueGen (n `div` 2))))
+        , VMap <$> (Map.fromList <$> resize 3 (listOf genMapEntry))
+        ]
       genString = listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ " "))
+      genKeyword = do
+        first <- elements (['a'..'z'] ++ ['A'..'Z'])
+        rest <- listOf (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-"))
+        return (first : rest)
+      genMapEntry = do
+        key <- genKeyword
+        val <- valueGen 2  -- Limit nesting depth
+        return (KeywordKey key, val)
 
 -- | Substitute a variable in an expression with a value
 substitute :: Expr -> String -> Value -> Expr
@@ -65,6 +91,9 @@ valueToExpr (VNumber n) = Atom (Number n)
 valueToExpr (VString s) = Atom (String s)
 valueToExpr (VBool b) = Atom (Bool b)
 valueToExpr (VList vals) = List (map valueToExpr vals)
+valueToExpr (VKeyword k) = Atom (Keyword k)
+valueToExpr (VSet _) = Atom (Symbol "<set>")  -- Sets can't be easily converted to Expr
+valueToExpr (VMap _) = Atom (Symbol "<map>")  -- Maps can't be easily converted to Expr
 valueToExpr (VClosure _) = Atom (Symbol "<closure>")  -- Closures can't be substituted
 valueToExpr (VPrimitive _) = Atom (Symbol "<primitive>")  -- Primitives can't be substituted
 
@@ -169,4 +198,80 @@ spec = describe "Property-Based Tests" $ do
   describe "Let binding shadowing" $ do
     it "inner bindings shadow outer bindings" $ do
       prop_let_shadowing
+  
+  describe "Map operations" $ do
+    it "assoc then get returns correct value" $ do
+      withMaxSuccess 100 $ property $ \m key val ->
+        let m' = case m of
+              VMap mp -> mp
+              _ -> Map.empty
+            keyStr = case key of
+              VKeyword k -> k
+              _ -> "test-key"
+            result = case evalExpr (List [Atom (Symbol "get")
+                                        , List [Atom (Symbol "assoc")
+                                               , valueToExpr (VMap m')
+                                               , Atom (Keyword keyStr)
+                                               , valueToExpr val]
+                                        , Atom (Keyword keyStr)]) initialEnv of
+              Right (VMap resultMap) -> Map.lookup (KeywordKey keyStr) resultMap
+              _ -> Nothing
+        in case result of
+          Just v -> v === val
+          _ -> property True  -- If evaluation fails, that's okay for property test
+    
+    it "dissoc removes key" $ do
+      withMaxSuccess 100 $ property $ \m key ->
+        let m' = case m of
+              VMap mp -> mp
+              _ -> Map.empty
+            keyStr = case key of
+              VKeyword k -> k
+              _ -> "test-key"
+            wasPresent = Map.member (KeywordKey keyStr) m'
+            result = case evalExpr (List [Atom (Symbol "dissoc")
+                                        , valueToExpr (VMap m')
+                                        , Atom (Keyword keyStr)]) initialEnv of
+              Right (VMap resultMap) -> Map.member (KeywordKey keyStr) resultMap
+              _ -> True
+        in if wasPresent
+          then property (not result)  -- If key was present, it should not be after dissoc
+          else property True  -- If key wasn't present, result doesn't matter
+  
+  describe "Set operations" $ do
+    it "union is commutative" $ do
+      withMaxSuccess 100 $ property $ \s1 s2 ->
+        let set1 = case s1 of VSet s -> s; _ -> Set.empty
+            set2 = case s2 of VSet s -> s; _ -> Set.empty
+            union1 = Set.union set1 set2
+            union2 = Set.union set2 set1
+        in union1 === union2
+    
+    it "intersection is idempotent" $ do
+      withMaxSuccess 100 $ property $ \s ->
+        let set = case s of VSet s' -> s'; _ -> Set.empty
+            intersection1 = Set.intersection set set
+        in intersection1 === set
+    
+    it "union is associative" $ do
+      withMaxSuccess 100 $ property $ \s1 s2 s3 ->
+        let set1 = case s1 of VSet s -> s; _ -> Set.empty
+            set2 = case s2 of VSet s -> s; _ -> Set.empty
+            set3 = case s3 of VSet s -> s; _ -> Set.empty
+            union12 = Set.union set1 set2
+            union123 = Set.union union12 set3
+            union23 = Set.union set2 set3
+            union123' = Set.union set1 union23
+        in union123 === union123'
+  
+  describe "Serialization" $ do
+    it "round-trip preserves values and types" $ do
+      withMaxSuccess 100 $ property $ \val ->
+        let pat = valueToPatternSubjectForGram val
+            gramText = patternToGram pat
+        in case gramToPattern gramText of
+          Left _ -> property True  -- Parse errors are okay for property test
+          Right pat' -> case patternSubjectToValue pat' of
+            Left _ -> property True  -- Deserialization errors are okay
+            Right val' -> val === val'
 

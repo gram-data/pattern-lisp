@@ -1,0 +1,92 @@
+;; Keywords, Maps, and Sets Examples
+;; This file demonstrates the usage of keywords, maps, and sets in Pattern Lisp
+
+;; ============================================================================
+;; Keywords
+;; ============================================================================
+
+;; Keywords are self-evaluating symbols with postfix colon syntax
+name:
+age:
+status:
+
+;; Keywords evaluate to themselves
+(= name: name:)  ;; => true
+
+;; ============================================================================
+;; Maps
+;; ============================================================================
+
+;; Create a map with keyword keys
+(def user {name: "Alice" age: 30 active: true})
+
+;; Access map values
+(get user name:)  ;; => "Alice"
+(get user age:)   ;; => 30
+(get user email: "unknown")  ;; => "unknown" (default value)
+
+;; Nested maps
+(def data {user: {name: "Bob" email: "bob@example.com"}
+           config: {debug: true verbose: false}})
+
+;; Nested access with get-in
+(get-in data (quote (user: name:)))  ;; => "Bob"
+
+;; Update maps (returns new map)
+(def user2 (assoc user age: 31))  ;; Update age
+(def user3 (dissoc user active:))  ;; Remove active key
+
+;; Check membership
+(contains? user name:)  ;; => true
+(contains? user email:)  ;; => false
+
+;; Empty map check
+(empty? {})  ;; => true
+(empty? user)  ;; => false
+
+;; Create map programmatically
+(hash-map name: "Charlie" age: 25)
+
+;; ============================================================================
+;; Sets
+;; ============================================================================
+
+;; Create sets
+(def numbers #{1 2 3 4 5})
+(def labels #{"Person" "Employee" "Manager"})
+
+;; Check membership
+(contains? numbers 3)  ;; => true
+(contains? numbers 10)  ;; => false
+
+;; Set operations
+(set-union #{1 2 3} #{3 4 5})  ;; => #{1 2 3 4 5}
+(set-intersection #{1 2 3} #{2 3 4})  ;; => #{2 3}
+(set-difference #{1 2 3 4} #{2 4})  ;; => #{1 3}
+(set-symmetric-difference #{1 2} #{2 3})  ;; => #{1 3}
+
+;; Set predicates
+(set-subset? #{1 2} #{1 2 3})  ;; => true
+(set-equal? #{1 2 3} #{3 2 1})  ;; => true
+(empty? #{})  ;; => true
+
+;; Create set programmatically
+(hash-set 10 20 30)
+
+;; ============================================================================
+;; Combined Examples
+;; ============================================================================
+
+;; Maps with set values (Subject labels)
+(def person {name: "Alice"
+             labels: #{"Person" "Employee"}
+             metadata: {department: "Engineering" level: "Senior"}})
+
+;; Sets of keywords
+(def permissions #{read: write: execute:})
+
+;; Nested structures
+(def config {servers: #{1 2 3}
+             settings: {timeout: 5000 retry: 3}
+             features: #{logging: caching: compression:}})
+
