@@ -31,6 +31,8 @@ Example programs can be loaded and evaluated programmatically using the library 
 
 Demonstrates recursive function definition and function calls. Defines a factorial function and computes `(factorial 5)`.
 
+**⚠️ Known Limitation**: This example currently fails because recursive definitions are not yet supported in the current implementation. The `define` form evaluates the value expression before adding the name to the environment, so recursive references aren't available. This is a known limitation that will be addressed in a future update.
+
 ### `lists.plisp`
 
 Demonstrates working with quoted lists. Defines list values and shows how to reference them.

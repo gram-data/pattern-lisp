@@ -6,6 +6,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-19
 - Haskell with GHC 9.10.3 (as per existing project setup) + megaparsec (parsing), text (string handling), containers (data structures), mtl (monad transformers), gram (from gram-hs for future serialization), hspec (testing), QuickCheck (property-based testing) (002-core-lisp-evaluator)
 - N/A (in-memory evaluation, no persistence required) (002-core-lisp-evaluator)
 - In-memory Pattern Subject structures; runtime state can be serialized to Subject for persistence (003-pattern-state-functions)
+- Haskell (GHC 9.10.3), Cabal build system + gram-hs (source repository), text, containers, megaparsec, mtl, hspec, QuickCheck (004-implementation-consistency-review)
+- N/A (documentation review, no data storage) (004-implementation-consistency-review)
 
 - Haskell with GHC 9.6.3 (see research.md for version selection rationale) + gram-hs (source repository from GitHub), text, containers, megaparsec, mtl, hspec, QuickCheck (001-pattern-lisp-init)
 
@@ -26,10 +28,10 @@ tests/
 Haskell with GHC 9.6.3 (see research.md for version selection rationale): Follow standard conventions
 
 ## Recent Changes
+- 004-implementation-consistency-review: Added Haskell (GHC 9.10.3), Cabal build system + gram-hs (source repository), text, containers, megaparsec, mtl, hspec, QuickCheck
 - 003-pattern-state-functions: Added Haskell with GHC 9.10.3 (as per existing project setup)
 - 002-core-lisp-evaluator: Added Haskell with GHC 9.10.3 (as per existing project setup) + megaparsec (parsing), text (string handling), containers (data structures), mtl (monad transformers), gram (from gram-hs for future serialization), hspec (testing), QuickCheck (property-based testing)
 
-- 001-pattern-lisp-init: Added Haskell with GHC 9.6.3 (see research.md for version selection rationale) + gram-hs (source repository from GitHub), text, containers, megaparsec, mtl, hspec, QuickCheck
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
