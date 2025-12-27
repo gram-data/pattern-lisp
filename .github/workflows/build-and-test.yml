@@ -1,0 +1,61 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        ghc-version: ['9.10.3']
+        cabal-version: ['3.10']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up GHC ${{ matrix.ghc-version }}
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc-version }}
+        cabal-version: ${{ matrix.cabal-version }}
+        enable-stack: false
+    
+    - name: Cache Cabal store
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cabal/store
+          ~/.cabal/packages
+        key: ${{ runner.os }}-cabal-${{ matrix.ghc-version }}-${{ hashFiles('cabal.project', 'pattern-lisp.cabal') }}
+        restore-keys: |
+          ${{ runner.os }}-cabal-${{ matrix.ghc-version }}-
+    
+    - name: Cache dist-newstyle
+      uses: actions/cache@v4
+      with:
+        path: dist-newstyle
+        key: ${{ runner.os }}-dist-${{ matrix.ghc-version }}-${{ hashFiles('**/*.hs', 'cabal.project', 'pattern-lisp.cabal') }}
+        restore-keys: |
+          ${{ runner.os }}-dist-${{ matrix.ghc-version }}-
+    
+    - name: Configure Cabal
+      run: cabal update
+    
+    - name: Build project
+      run: cabal build --ghc-options="-Wall" all
+    
+    - name: Run tests
+      run: cabal test --test-show-details=direct all
+    
+    - name: Build executable
+      run: cabal build exe:pattern-lisp
+

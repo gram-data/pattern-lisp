@@ -54,4 +54,31 @@ spec = describe "PatternLisp.Parser" $ do
     it "parses booleans (#t, #f)" $ do
       parseExpr "#t" `shouldBe` Right (Atom (Bool True))
       parseExpr "#f" `shouldBe` Right (Atom (Bool False))
+    
+    it "parses keywords with postfix colon syntax" $ do
+      parseExpr "name:" `shouldBe` Right (Atom (Keyword "name"))
+      parseExpr "age:" `shouldBe` Right (Atom (Keyword "age"))
+      parseExpr "on-success:" `shouldBe` Right (Atom (Keyword "on-success"))
+    
+    it "parses set literals with hash set syntax" $ do
+      parseExpr "#{1 2 3}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)])
+      parseExpr "#{}" `shouldBe` Right (SetLiteral [])
+      parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String (T.pack "hello")), Atom (Bool True)])
+    
+    it "parses map literals with curly brace syntax" $ do
+      parseExpr "{name: \"Alice\" age: 30}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "age"), Atom (Number 30)])
+      parseExpr "{}" `shouldBe` Right (MapLiteral [])
+    
+    it "parses nested maps" $ do
+      parseExpr "{user: {name: \"Bob\"}}" `shouldBe` Right (MapLiteral [Atom (Keyword "user"), MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Bob"))]])
+    
+    it "handles duplicate keys in map literals (last value wins)" $ do
+      -- Parser allows duplicate keys; evaluator handles them (last wins)
+      parseExpr "{name: \"Alice\" name: \"Bob\"}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "name"), Atom (String (T.pack "Bob"))])
+    
+    it "parses map literals with string keys" $ do
+      parseExpr "{\"name\" \"Alice\" \"age\" 30}" `shouldBe` Right (MapLiteral [Atom (String (T.pack "name")), Atom (String (T.pack "Alice")), Atom (String (T.pack "age")), Atom (Number 30)])
+    
+    it "parses map literals with mixed keyword and string keys" $ do
+      parseExpr "{name: \"Alice\" \"user-id\" 123}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (String (T.pack "user-id")), Atom (Number 123)])
 

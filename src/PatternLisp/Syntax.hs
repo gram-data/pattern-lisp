@@ -19,6 +19,8 @@ module PatternLisp.Syntax
   ( Expr(..)
   , Atom(..)
   , Value(..)
+  , KeywordKey(..)
+  , MapKey(..)
   , Closure(..)
   , Primitive(..)
   , Env
@@ -27,7 +29,8 @@ module PatternLisp.Syntax
   , primitiveFromName
   ) where
 
-import Data.Map (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Data.Text (Text)
 import Subject.Core (Subject)
 import Pattern (Pattern)
@@ -36,6 +39,8 @@ import Pattern (Pattern)
 data Expr
   = Atom Atom          -- ^ Symbols, numbers, strings, booleans
   | List [Expr]        -- ^ S-expressions (function calls, special forms)
+  | SetLiteral [Expr]  -- ^ Set literals #{...}
+  | MapLiteral [Expr]  -- ^ Map literals {key: value ...} (alternating key-value pairs)
   | Quote Expr         -- ^ Quoted expressions (prevent evaluation)
   deriving (Eq, Show)
 
@@ -45,18 +50,84 @@ data Atom
   | Number Integer     -- ^ Integer literals
   | String Text        -- ^ String literals
   | Bool Bool          -- ^ Boolean literals (#t, #f)
+  | Keyword String     -- ^ Keywords with postfix colon syntax (name:)
   deriving (Eq, Show)
+
+-- | Keyword type for map keys (newtype wrapper for type safety)
+newtype KeywordKey = KeywordKey String
+  deriving (Eq, Ord, Show)
+
+-- | Map key type: can be either a keyword or a string
+-- Keywords are convenient (Clojure-like), strings are flexible (JSON-like)
+data MapKey = KeyKeyword KeywordKey  -- ^ Keyword key (name:)
+            | KeyString String       -- ^ String key ("name")
+  deriving (Eq, Show)
+
+-- | Ord instance for MapKey: keywords sort before strings, then by value
+instance Ord MapKey where
+  compare (KeyKeyword (KeywordKey k1)) (KeyKeyword (KeywordKey k2)) = compare k1 k2
+  compare (KeyString s1) (KeyString s2) = compare s1 s2
+  compare (KeyKeyword _) (KeyString _) = LT  -- Keywords sort before strings
+  compare (KeyString _) (KeyKeyword _) = GT
 
 -- | Runtime values that expressions evaluate to
 data Value
   = VNumber Integer           -- ^ Numeric values
   | VString Text              -- ^ String values
   | VBool Bool                -- ^ Boolean values
+  | VKeyword String           -- ^ Keyword values (self-evaluating)
+  | VMap (Map.Map MapKey Value)  -- ^ Map values with keyword or string keys
+  | VSet (Set.Set Value)      -- ^ Set values (unordered, unique elements)
   | VList [Value]             -- ^ List values
   | VPattern (Pattern Subject)  -- ^ Pattern values with Subject decoration
   | VClosure Closure          -- ^ Function closures
   | VPrimitive Primitive       -- ^ Built-in primitive functions
   deriving (Eq, Show)
+
+-- | Ord instance for Value (needed for Set operations)
+-- Uses tag-based ordering: compares constructor tags first, then values
+instance Ord Value where
+  compare (VNumber a) (VNumber b) = compare a b
+  compare (VNumber _) _ = LT
+  compare _ (VNumber _) = GT
+  
+  compare (VString a) (VString b) = compare a b
+  compare (VString _) _ = LT
+  compare _ (VString _) = GT
+  
+  compare (VBool a) (VBool b) = compare a b
+  compare (VBool _) _ = LT
+  compare _ (VBool _) = GT
+  
+  compare (VKeyword a) (VKeyword b) = compare a b
+  compare (VKeyword _) _ = LT
+  compare _ (VKeyword _) = GT
+  
+  compare (VMap a) (VMap b) = compare (Map.toAscList a) (Map.toAscList b)
+  compare (VMap _) _ = LT
+  compare _ (VMap _) = GT
+  
+  compare (VSet a) (VSet b) = compare (Set.toList a) (Set.toList b)
+  compare (VSet _) _ = LT
+  compare _ (VSet _) = GT
+  
+  compare (VList a) (VList b) = compare a b
+  compare (VList _) _ = LT
+  compare _ (VList _) = GT
+  
+  compare (VPattern p1) (VPattern p2)
+    | VPattern p1 == VPattern p2 = EQ  -- If equal, return EQ (Ord contract)
+    | otherwise = compare (show p1) (show p2)  -- Otherwise, consistent ordering by Show
+  compare (VPattern _) _ = LT
+  compare _ (VPattern _) = GT
+  
+  compare (VClosure c1) (VClosure c2)
+    | VClosure c1 == VClosure c2 = EQ  -- If equal, return EQ (Ord contract)
+    | otherwise = compare (show c1) (show c2)  -- Otherwise, consistent ordering by Show
+  compare (VClosure _) _ = LT
+  compare _ (VClosure _) = GT
+  
+  compare (VPrimitive a) (VPrimitive b) = compare a b
 
 -- | Function value that captures its lexical environment
 data Closure = Closure
@@ -88,10 +159,27 @@ data Primitive
   -- Pattern conversion
   | ValueToPattern     -- ^ (value-to-pattern v): convert any value to pattern
   | PatternToValue     -- ^ (pattern-to-value p): convert pattern to value
-  deriving (Eq, Show)
+  -- Set operations
+  | SetContains        -- ^ (contains? set value): check membership
+  | SetUnion          -- ^ (set-union set1 set2): union of two sets
+  | SetIntersection   -- ^ (set-intersection set1 set2): intersection of two sets
+  | SetDifference     -- ^ (set-difference set1 set2): elements in set1 not in set2
+  | SetSymmetricDifference  -- ^ (set-symmetric-difference set1 set2): elements in either but not both
+  | SetSubset         -- ^ (set-subset? set1 set2): check if set1 is subset of set2
+  | SetEqual          -- ^ (set-equal? set1 set2): check if sets are equal
+  | SetEmpty          -- ^ (empty? set): check if set is empty
+  | HashSet           -- ^ (hash-set ...): create set from arguments
+  -- Map operations
+  | MapGet            -- ^ (get map key [default]): get value at key, return default or nil if not found
+  | MapGetIn          -- ^ (get-in map [key1 key2 ...]): nested access via keyword path
+  | MapAssoc          -- ^ (assoc map key value): add/update key-value pair
+  | MapDissoc         -- ^ (dissoc map key): remove key from map
+  | MapUpdate         -- ^ (update map key f): apply function to value at key, create with f(nil) if missing
+  | HashMap           -- ^ (hash-map key1 val1 key2 val2 ...): create map from alternating keyword-value pairs
+  deriving (Eq, Show, Ord)
 
 -- | Environment mapping variable names to values
-type Env = Map String Value
+type Env = Map.Map String Value
 
 -- | Evaluation and parsing errors
 data Error
@@ -128,6 +216,21 @@ primitiveName PatternAny = "pattern-any?"
 primitiveName PatternAll = "pattern-all?"
 primitiveName ValueToPattern = "value-to-pattern"
 primitiveName PatternToValue = "pattern-to-value"
+primitiveName SetContains = "contains?"
+primitiveName SetUnion = "set-union"
+primitiveName SetIntersection = "set-intersection"
+primitiveName SetDifference = "set-difference"
+primitiveName SetSymmetricDifference = "set-symmetric-difference"
+primitiveName SetSubset = "set-subset?"
+primitiveName SetEqual = "set-equal?"
+primitiveName SetEmpty = "empty?"
+primitiveName HashSet = "hash-set"
+primitiveName MapGet = "get"
+primitiveName MapGetIn = "get-in"
+primitiveName MapAssoc = "assoc"
+primitiveName MapDissoc = "dissoc"
+primitiveName MapUpdate = "update"
+primitiveName HashMap = "hash-map"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -155,5 +258,20 @@ primitiveFromName "pattern-any?" = Just PatternAny
 primitiveFromName "pattern-all?" = Just PatternAll
 primitiveFromName "value-to-pattern" = Just ValueToPattern
 primitiveFromName "pattern-to-value" = Just PatternToValue
+primitiveFromName "contains?" = Just SetContains
+primitiveFromName "set-union" = Just SetUnion
+primitiveFromName "set-intersection" = Just SetIntersection
+primitiveFromName "set-difference" = Just SetDifference
+primitiveFromName "set-symmetric-difference" = Just SetSymmetricDifference
+primitiveFromName "set-subset?" = Just SetSubset
+primitiveFromName "set-equal?" = Just SetEqual
+primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and maps
+primitiveFromName "hash-set" = Just HashSet
+primitiveFromName "get" = Just MapGet
+primitiveFromName "get-in" = Just MapGetIn
+primitiveFromName "assoc" = Just MapAssoc
+primitiveFromName "dissoc" = Just MapDissoc
+primitiveFromName "update" = Just MapUpdate
+primitiveFromName "hash-map" = Just HashMap
 primitiveFromName _ = Nothing
 

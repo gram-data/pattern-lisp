@@ -55,17 +55,27 @@ parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
 
 -- | Main expression parser (recursive)
 exprParser :: Parser Expr
-exprParser = skipSpace *> (quoteParser <|> atomParser <|> listParser) <* skipSpace
+exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> try mapParser <|> listParser) <* skipSpace
 
--- | Atom parser (symbol, number, string, bool)
--- Try symbols before numbers to catch operators like + and -
+-- | Atom parser (keyword, symbol, number, string, bool)
+-- Try keywords before symbols to catch postfix colon syntax
 atomParser :: Parser Expr
-atomParser = Atom <$> (stringParser <|> boolParser <|> try symbolParser <|> numberParser)
+atomParser = Atom <$> (stringParser <|> boolParser <|> try keywordParser <|> try symbolParser <|> numberParser)
+
+-- | Keyword parser (symbol followed by colon)
+-- Keywords use postfix colon syntax: name:, age:, etc.
+keywordParser :: Parser Atom
+keywordParser = Keyword <$> (identifier <* char ':')
+  where
+    identifier = (:) <$> firstChar <*> many restChar
+    firstChar = letterChar <|> satisfy (\c -> c `elem` ("!$%&*+-./<=>?@^_~" :: String))
+    restChar = firstChar <|> digitChar
 
 -- | Symbol parser (valid identifiers)
 -- Note: Does not match if it looks like a number (starts with + or - followed by digit)
+-- Note: Does not match keywords (symbols ending with colon)
 symbolParser :: Parser Atom
-symbolParser = Symbol <$> (try (notFollowedBy numberLike) *> identifier)
+symbolParser = Symbol <$> (try (notFollowedBy numberLike) *> try (notFollowedBy (identifier <* char ':')) *> identifier)
   where
     identifier = (:) <$> firstChar <*> many restChar
     firstChar = letterChar <|> satisfy (\c -> c `elem` ("!$%&*+-./:<=>?@^_~" :: String))
@@ -91,6 +101,35 @@ stringParser = String . T.pack <$> (char '"' *> manyTill stringChar (char '"'))
 -- | Boolean parser (#t, #f)
 boolParser :: Parser Atom
 boolParser = (string "#t" *> pure (Bool True)) <|> (string "#f" *> pure (Bool False))
+
+-- | Set parser (hash set syntax #{...})
+setParser :: Parser Expr
+setParser = do
+  _ <- string "#{"
+  skipSpace
+  exprs <- many (exprParser <* skipSpace)
+  skipSpace
+  _ <- char '}'
+  return $ SetLiteral exprs
+
+-- | Map parser (curly brace syntax {key: value ...})
+-- Maps use alternating key-value pairs where keys can be keywords or strings
+mapParser :: Parser Expr
+mapParser = do
+  _ <- char '{'
+  skipSpace
+  pairs <- many (mapPair <* skipSpace)
+  skipSpace
+  _ <- char '}'
+  return $ MapLiteral (concat pairs)  -- Flatten pairs into single list
+  where
+    mapPair = do
+      key <- try keywordParser <|> stringParser  -- Key can be keyword or string
+      skipSpace
+      -- For string keys, no colon needed (already quoted)
+      -- For keyword keys, colon is part of the keyword syntax
+      value <- exprParser
+      return [Atom key, value]
 
 -- | List parser (parentheses)
 listParser :: Parser Expr

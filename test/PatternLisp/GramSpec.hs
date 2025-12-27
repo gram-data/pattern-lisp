@@ -116,4 +116,29 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err
         Right pat -> pat `shouldBe` inputPat
+  
+  describe "Subject Labels as String Sets" $ do
+    it "verifies string sets can be used directly for gram pattern Subject labels" $ do
+      -- Test that Subject labels are Set String and can be used with gram patterns
+      -- This demonstrates that #{"Person" "Employee"} conceptually represents Subject labels
+      let labelSet = Set.fromList ["Person", "Employee"]  -- Set String (Subject labels type)
+          subject = SubjectCore.Subject
+            { identity = SubjectCore.Symbol "user-123"
+            , labels = labelSet
+            , properties = Map.fromList [("name", SubjectValue.VString "Alice")]
+            }
+          pat = pattern subject
+          gramText = patternToGram pat
+      -- Round-trip through gram notation
+      case gramToPattern gramText of
+        Left err -> fail $ "Gram parse error: " ++ show err
+        Right pat' -> do
+          let subj' = PatternCore.value pat'
+          -- Verify labels (Set String) are preserved through gram serialization
+          labels subj' `shouldBe` labelSet
+          properties subj' `shouldBe` properties subject
+          -- Verify that labels are indeed a Set String (unordered, unique)
+          Set.size (labels subj') `shouldBe` 2
+          "Person" `Set.member` (labels subj') `shouldBe` True
+          "Employee" `Set.member` (labels subj') `shouldBe` True
 

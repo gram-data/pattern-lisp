@@ -1,8 +1,8 @@
 # Pattern-Lisp Syntax Conventions
 
-**⚠️ Future: Not Yet Implemented - Design Document v0.1**
+**Status: Partially Implemented - Design Document v0.1**
 
-This document describes planned syntax conventions for Pattern Lisp. The features described here (keywords, maps, sets, labels) are **not yet implemented** in the current codebase.
+This document describes syntax conventions for Pattern Lisp. Keywords, maps, and sets are **now implemented** (as of 2025-01-27). Prefix colon syntax for labels is optional and deferred.
 
 ### Overview
 

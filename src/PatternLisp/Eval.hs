@@ -32,6 +32,7 @@ import Pattern (Pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Control.Monad.Reader
 import Control.Monad.Except
 import qualified Data.Text as T
@@ -89,7 +90,31 @@ evalWithEnv expr = do
 
 -- | Main evaluation function
 eval :: Expr -> EvalM Value
+-- | Convert a Value to a MapKey (keyword or string)
+valueToMapKey :: Value -> Either Error MapKey
+valueToMapKey (VKeyword name) = Right $ KeyKeyword (KeywordKey name)
+valueToMapKey (VString s) = Right $ KeyString (T.unpack s)
+valueToMapKey v = Left $ TypeMismatch ("Map keys must be keywords or strings, got: " ++ show v) v
+
 eval (Atom atom) = evalAtom atom
+eval (SetLiteral exprs) = do
+  vals <- mapM eval exprs
+  return $ VSet (Set.fromList vals)  -- Remove duplicates automatically
+eval (MapLiteral pairs) = do
+  -- Pairs is a list of alternating [key, value, key, value, ...]
+  -- We need to process them in pairs and handle duplicate keys (last wins)
+  -- Process left-to-right so that later keys overwrite earlier ones
+  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+      processPairs acc [] = return acc
+      processPairs acc (k:v:rest) = do
+        keyVal <- eval k
+        valVal <- eval v
+        case valueToMapKey keyVal of
+          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
+          Left err -> throwError err
+      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+  m <- processPairs Map.empty pairs
+  return $ VMap m
 eval (List []) = return $ VList []
 eval (List (Atom (Symbol "lambda"):rest)) = evalLambda rest
 eval (List (Atom (Symbol "if"):rest)) = evalIf rest
@@ -108,6 +133,7 @@ evalAtom :: Atom -> EvalM Value
 evalAtom (Number n) = return $ VNumber n
 evalAtom (String s) = return $ VString s
 evalAtom (Bool b) = return $ VBool b
+evalAtom (Keyword name) = return $ VKeyword name  -- Keywords are self-evaluating, no environment lookup
 evalAtom (Symbol name) = do
   currentEnv <- ask
   case Map.lookup name currentEnv of
@@ -169,10 +195,7 @@ applyPrimitive Lt args = case args of
     return $ VBool (nx < ny)
   _ -> throwError $ ArityMismatch "<" 2 (length args)
 applyPrimitive Eq args = case args of
-  [x, y] -> do
-    nx <- expectNumber x
-    ny <- expectNumber y
-    return $ VBool (nx == ny)
+  [x, y] -> return $ VBool (x == y)  -- Use Eq instance for Value (handles all types including keywords)
   _ -> throwError $ ArityMismatch "=" 2 (length args)
 applyPrimitive Ne args = case args of
   [x, y] -> do
@@ -255,6 +278,118 @@ applyPrimitive PatternToValue args = case args of
   [VPattern pat] -> evalPatternToValue pat
   [v] -> throwError $ TypeMismatch ("pattern-to-value expects pattern, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "pattern-to-value" 1 (length args)
+-- Set operation primitives
+applyPrimitive SetContains args = case args of
+  [VSet s, val] -> return $ VBool (Set.member val s)
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VBool (Map.member mapKey m)  -- Also handle maps
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("contains? expects set or map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "contains?" 2 (length args)
+applyPrimitive SetUnion args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.union s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-union expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-union expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-union" 2 (length args)
+applyPrimitive SetIntersection args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.intersection s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-intersection expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-intersection expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-intersection" 2 (length args)
+applyPrimitive SetDifference args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.difference s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-difference expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-difference expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-difference" 2 (length args)
+applyPrimitive SetSymmetricDifference args = case args of
+  [VSet s1, VSet s2] -> return $ VSet (Set.union (Set.difference s1 s2) (Set.difference s2 s1))
+  [VSet _, v] -> throwError $ TypeMismatch ("set-symmetric-difference expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-symmetric-difference expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-symmetric-difference" 2 (length args)
+applyPrimitive SetSubset args = case args of
+  [VSet s1, VSet s2] -> return $ VBool (Set.isSubsetOf s1 s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-subset? expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-subset? expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-subset?" 2 (length args)
+applyPrimitive SetEqual args = case args of
+  [VSet s1, VSet s2] -> return $ VBool (s1 == s2)
+  [VSet _, v] -> throwError $ TypeMismatch ("set-equal? expects set as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("set-equal? expects set as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "set-equal?" 2 (length args)
+applyPrimitive SetEmpty args = case args of
+  [VSet s] -> return $ VBool (Set.null s)
+  [VMap m] -> return $ VBool (Map.null m)  -- Also handle maps
+  [v] -> throwError $ TypeMismatch ("empty? expects set or map, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "empty?" 1 (length args)
+applyPrimitive HashSet args = return $ VSet (Set.fromList args)
+-- Map operation primitives
+applyPrimitive MapGet args = case args of
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ case Map.lookup mapKey m of
+      Just val -> val
+      Nothing -> VList []  -- Return empty list as nil
+    Left err -> throwError err
+  [VMap m, keyVal, defaultVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ Map.findWithDefault defaultVal mapKey m
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("get expects map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "get" 2 (length args)
+applyPrimitive MapGetIn args = case args of
+  [VMap m, VList keys] -> do
+    -- keys is a list of keywords or strings: [key1, key2, ...]
+    let getInPath :: Map.Map MapKey Value -> [Value] -> EvalM Value
+        getInPath _ [] = return $ VList []  -- Return nil if path exhausted
+        getInPath currentMap (keyVal:rest) = do
+          case valueToMapKey keyVal of
+            Right mapKey -> case Map.lookup mapKey currentMap of
+              Just (VMap nestedMap) | null rest -> return $ VMap nestedMap  -- Path ends at map, return it
+              Just (VMap nestedMap) -> getInPath nestedMap rest  -- Continue path into nested map
+              Just val | null rest -> return val  -- Path ends at non-map value, return it
+              Just _ -> return $ VList []  -- Path doesn't lead to map, return nil
+              Nothing -> return $ VList []  -- Key not found, return nil
+            Left err -> throwError err
+    getInPath m keys
+  [VMap _, v] -> throwError $ TypeMismatch ("get-in expects list of keywords or strings as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("get-in expects map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "get-in" 2 (length args)
+applyPrimitive MapAssoc args = case args of
+  [VMap m, keyVal, val] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VMap (Map.insert mapKey val m)
+    Left err -> throwError err
+  [v, _, _] -> throwError $ TypeMismatch ("assoc expects map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "assoc" 3 (length args)
+applyPrimitive MapDissoc args = case args of
+  [VMap m, keyVal] -> case valueToMapKey keyVal of
+    Right mapKey -> return $ VMap (Map.delete mapKey m)
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("dissoc expects map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "dissoc" 2 (length args)
+applyPrimitive MapUpdate args = case args of
+  [VMap m, keyVal, VClosure closure] -> case valueToMapKey keyVal of
+    Right mapKey -> do
+      -- Get current value or nil (empty list)
+      let currentVal = Map.findWithDefault (VList []) mapKey m
+      -- Apply function to current value
+      updatedVal <- applyClosure closure [currentVal]
+      return $ VMap (Map.insert mapKey updatedVal m)
+    Left err -> throwError err
+  [VMap _, _, v] -> throwError $ TypeMismatch ("update expects closure as third argument, but got: " ++ show v) v
+  [v, _, _] -> throwError $ TypeMismatch ("update expects map as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "update" 3 (length args)
+applyPrimitive HashMap args
+  | even (length args) = do
+      -- Process alternating keyword-value or string-value pairs
+      -- Process left-to-right so that later keys overwrite earlier ones
+      let processPairs :: Map.Map MapKey Value -> [Value] -> EvalM (Map.Map MapKey Value)
+          processPairs acc [] = return acc
+          processPairs acc (keyVal:val:rest) = do
+            case valueToMapKey keyVal of
+              Right mapKey -> processPairs (Map.insert mapKey val acc) rest
+              Left err -> throwError err
+          processPairs _ _ = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
+      m <- processPairs Map.empty args
+      return $ VMap m
+  | otherwise = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
 
 -- | Apply a closure (extend captured environment with arguments)
 applyClosure :: Closure -> [Value] -> EvalM Value
@@ -399,10 +534,28 @@ exprToValue :: Expr -> EvalM Value
 exprToValue (Atom (Number n)) = return $ VNumber n
 exprToValue (Atom (String s)) = return $ VString s
 exprToValue (Atom (Bool b)) = return $ VBool b
+exprToValue (Atom (Keyword name)) = return $ VKeyword name
 exprToValue (Atom (Symbol name)) = return $ VString (T.pack name)
 exprToValue (List exprs) = do
   vals <- mapM exprToValue exprs
   return $ VList vals
+exprToValue (SetLiteral exprs) = do
+  vals <- mapM exprToValue exprs
+  return $ VSet (Set.fromList vals)
+exprToValue (MapLiteral pairs) = do
+  -- Process pairs: [key, value, key, value, ...]
+  -- Process left-to-right so that later keys overwrite earlier ones
+  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+      processPairs acc [] = return acc
+      processPairs acc (k:v:rest) = do
+        keyVal <- exprToValue k
+        valVal <- exprToValue v
+        case valueToMapKey keyVal of
+          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
+          Left err -> throwError err
+      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+  m <- processPairs Map.empty pairs
+  return $ VMap m
 exprToValue (Quote expr) = exprToValue expr
 
 -- | Evaluate lambda form: (lambda (params...) body)

@@ -2,11 +2,13 @@ module PatternLisp.EvalSpec (spec) where
 
 import Test.Hspec
 import PatternLisp.Syntax
+import PatternLisp.Syntax (MapKey(..), KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
 import qualified Data.Text as T
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 spec :: Spec
 spec = describe "PatternLisp.Eval - Core Language Forms" $ do
@@ -137,4 +139,107 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VNumber 15
+  
+  describe "Keywords" $ do
+    it "evaluates keyword to itself without environment lookup" $ do
+      case parseExpr "name:" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VKeyword "name"
+    
+    it "evaluates keyword comparison (= name: name:)" $ do
+      case parseExpr "(= name: name:)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
+    
+    it "keywords are distinct from symbols (type error if used as symbol)" $ do
+      -- Try to use keyword as a variable name (should fail)
+      case parseExpr "name:" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> do
+          -- Create an environment where "name" is defined
+          let envWithName = Map.insert "name" (VString (T.pack "Alice")) initialEnv
+          case evalExpr expr envWithName of
+            -- Keyword should evaluate to itself, not lookup "name" in environment
+            Left err -> fail $ "Eval error: " ++ show err
+            Right val -> val `shouldBe` VKeyword "name"  -- Should be keyword, not "Alice"
+  
+  describe "Sets" $ do
+    it "evaluates set literal #{1 2 3}" $ do
+      case parseExpr "#{1 2 3}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+    
+    it "removes duplicates from set literal #{1 2 2 3}" $ do
+      case parseExpr "#{1 2 2 3}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 3  -- Duplicates removed
+                Set.member (VNumber 1) s `shouldBe` True
+                Set.member (VNumber 2) s `shouldBe` True
+                Set.member (VNumber 3) s `shouldBe` True
+              _ -> fail $ "Expected VSet, got: " ++ show val
+  
+  describe "Maps" $ do
+    it "evaluates map literal {name: \"Alice\" age: 30}" $ do
+      case parseExpr "{name: \"Alice\" age: 30}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 2
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Alice"))
+                Map.lookup (KeyKeyword (KeywordKey "age")) m `shouldBe` Just (VNumber 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "duplicate keys: last value wins {name: \"Alice\" name: \"Bob\"}" $ do
+      case parseExpr "{name: \"Alice\" name: \"Bob\"}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 1
+                Map.lookup (KeyKeyword (KeywordKey "name")) m `shouldBe` Just (VString (T.pack "Bob"))  -- Last value wins
+              _ -> fail $ "Expected VMap, got: " ++ show val
+  
+  describe "Subject Labels as String Sets" $ do
+    it "creates Subject label set #{\"Person\" \"Employee\"}" $ do
+      case parseExpr "#{\"Person\" \"Employee\"}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VSet s -> do
+                Set.size s `shouldBe` 2
+                Set.member (VString (T.pack "Person")) s `shouldBe` True
+                Set.member (VString (T.pack "Employee")) s `shouldBe` True
+              _ -> fail $ "Expected VSet of strings, got: " ++ show val
+    
+    it "checks Subject label set membership (contains? #{\"Person\" \"Employee\"} \"Person\")" $ do
+      case parseExpr "(contains? #{\"Person\" \"Employee\"} \"Person\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBool True
 
