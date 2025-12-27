@@ -296,6 +296,18 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Map.lookup (KeywordKey "name") nestedMap `shouldBe` Just (VString (T.pack "Alice"))
               _ -> fail $ "Expected nested map, got: " ++ show val
     
+    it "get-in returns map when path ends at map (get-in {a: {b: 42}} (quote (a:)))" $ do
+      -- Test the bug fix: when path ends at a map, should return the map, not nil
+      case parseExpr "(get-in {a: {b: 42}} (quote (a:)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap nestedMap -> do
+                Map.lookup (KeywordKey "b") nestedMap `shouldBe` Just (VNumber 42)
+              _ -> fail $ "Expected VMap {b: 42}, got: " ++ show val
+    
     it "evaluates assoc primitive (assoc {name: \"Alice\"} age: 30)" $ do
       case parseExpr "(assoc {name: \"Alice\"} age: 30)" of
         Left err -> fail $ "Parse error: " ++ show err

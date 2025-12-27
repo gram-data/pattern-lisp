@@ -332,8 +332,9 @@ applyPrimitive MapGetIn args = case args of
         getInPath _ [] = return $ VList []  -- Return nil if path exhausted
         getInPath currentMap (VKeyword key:rest) = do
           case Map.lookup (KeywordKey key) currentMap of
-            Just (VMap nestedMap) -> getInPath nestedMap rest
-            Just val | null rest -> return val
+            Just (VMap nestedMap) | null rest -> return $ VMap nestedMap  -- Path ends at map, return it
+            Just (VMap nestedMap) -> getInPath nestedMap rest  -- Continue path into nested map
+            Just val | null rest -> return val  -- Path ends at non-map value, return it
             Just _ -> return $ VList []  -- Path doesn't lead to map, return nil
             Nothing -> return $ VList []  -- Key not found, return nil
         getInPath _ (v:_) = throwError $ TypeMismatch ("get-in path must contain keywords, got: " ++ show v) v
@@ -362,15 +363,6 @@ applyPrimitive MapUpdate args = case args of
   [VMap _, v, _] -> throwError $ TypeMismatch ("update expects keyword as second argument, but got: " ++ show v) v
   [v, _, _] -> throwError $ TypeMismatch ("update expects map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "update" 3 (length args)
-applyPrimitive MapContains args = case args of
-  [VMap m, VKeyword key] -> return $ VBool (Map.member (KeywordKey key) m)
-  [VMap _, v] -> throwError $ TypeMismatch ("contains? expects keyword as second argument, but got: " ++ show v) v
-  [v, _] -> throwError $ TypeMismatch ("contains? expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "contains?" 2 (length args)
-applyPrimitive MapEmpty args = case args of
-  [VMap m] -> return $ VBool (Map.null m)
-  [v] -> throwError $ TypeMismatch ("empty? expects map, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "empty?" 1 (length args)
 applyPrimitive HashMap args
   | even (length args) = do
       -- Process alternating keyword-value pairs

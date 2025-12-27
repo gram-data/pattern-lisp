@@ -157,8 +157,6 @@ data Primitive
   | MapAssoc          -- ^ (assoc map key value): add/update key-value pair
   | MapDissoc         -- ^ (dissoc map key): remove key from map
   | MapUpdate         -- ^ (update map key f): apply function to value at key, create with f(nil) if missing
-  | MapContains       -- ^ (contains? map key): check if map contains key
-  | MapEmpty          -- ^ (empty? map): check if map is empty
   | HashMap           -- ^ (hash-map key1 val1 key2 val2 ...): create map from alternating keyword-value pairs
   deriving (Eq, Show, Ord)
 
@@ -214,8 +212,6 @@ primitiveName MapGetIn = "get-in"
 primitiveName MapAssoc = "assoc"
 primitiveName MapDissoc = "dissoc"
 primitiveName MapUpdate = "update"
-primitiveName MapContains = "contains?"
-primitiveName MapEmpty = "empty?"
 primitiveName HashMap = "hash-map"
 
 -- | Look up a Primitive by its string name (for deserialization)
@@ -258,7 +254,6 @@ primitiveFromName "get-in" = Just MapGetIn
 primitiveFromName "assoc" = Just MapAssoc
 primitiveFromName "dissoc" = Just MapDissoc
 primitiveFromName "update" = Just MapUpdate
-primitiveFromName "contains?" = Just MapContains  -- Note: contains? works for both sets and maps
 primitiveFromName "hash-map" = Just HashMap
 primitiveFromName _ = Nothing
 
