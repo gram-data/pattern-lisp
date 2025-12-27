@@ -186,7 +186,7 @@ The prefix/postfix difference reflects a meaningful semantic distinction:
 
 ;; In pattern-lisp code working with patterns
 ;; Note: Labels are sets (Set String), so use set syntax
-(def pattern (node 'a #{:Person :Employee} {name: "Alice"}))
+(define pattern (node 'a #{:Person :Employee} {name: "Alice"}))
 ```
 
 ### Labels in Pattern-Lisp
