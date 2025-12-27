@@ -131,6 +131,109 @@ Core modules:
 
 ## Future Directions (Beyond Initial Scope)
 
+### Core Language Features from Syntax Conventions
+
+**From `docs/pattern-lisp-syntax-conventions.md`:**
+
+**Keywords and Maps** (Not Yet Implemented - Design Document v0.1)
+
+This feature implements the core syntax conventions described in `docs/pattern-lisp-syntax-conventions.md`, enabling keywords, maps, and label syntax for clean interoperability with gram notation.
+
+**Keywords with postfix colon syntax**: `name:`, `age:`, etc.
+- Keywords are self-evaluating symbols (no lookup occurs)
+- Used for map keys, option/configuration maps, tagged unions, keyword arguments
+- **Implementation tasks**:
+  - Add `Keyword String` variant to `Atom` type in `Syntax.hs`
+  - Add `VKeyword String` variant to `Value` type in `Syntax.hs`
+  - Add keyword parser to `Parser.hs` (recognizes `symbol:` pattern)
+  - Add keyword evaluation to `Eval.hs` (keywords evaluate to themselves)
+  - Update serialization in `Codec.hs` to handle keywords
+
+**Map literals with curly brace syntax**: `{name: "Alice" age: 30 active: true}`
+- Maps use keywords as keys with postfix colon syntax
+- Support nested maps
+- **Implementation tasks**:
+  - Add `VMap (Map String Value)` variant to `Value` type in `Syntax.hs` (using String keys for now, or `Map Keyword Value` if keywords implemented first)
+  - Add map literal parser to `Parser.hs` (recognizes `{ key: value ... }` syntax)
+  - Add map literal evaluation to `Eval.hs`
+  - Update serialization in `Codec.hs` to handle maps
+
+**Map operations**:
+- `(get m key:)` - get value with default nil
+- `(get m key: default)` - get value with explicit default
+- `(get-in data [user: name:])` - nested access (path is list of keywords)
+- `(assoc m key: value)` - add/update key
+- `(dissoc m key:)` - remove key
+- `(update m key: f)` - apply function to value at key
+- `(contains? m key:)` - check if key present
+- `(empty? m)` - check if map is empty
+- `(hash-map key1: val1 key2: val2 ...)` - construct map from key-value pairs
+- **Implementation tasks**:
+  - Add map operation primitives to `Primitive` type in `Syntax.hs`
+  - Add all map operation primitives to `Primitives.hs` initialEnv
+  - Implement map operations in `Eval.hs`
+  - Add tests for all map operations
+
+**Label syntax** (prefix colon): `:Person`, `:Employee`
+- Labels are used for gram notation interop and type annotations
+- Support label sets: `#{:Person :Employee}`
+- **Implementation tasks**:
+  - Add `Label String` variant to `Atom` type in `Syntax.hs` (optional - may be handled via gram interop only)
+  - Add label parser to `Parser.hs` (recognizes `:symbol` pattern)
+  - Add label evaluation to `Eval.hs`
+  - Update serialization in `Codec.hs` to handle labels
+
+**Namespaced symbols**: `effect/succeed`, `string/split`
+- Currently supported as regular symbols (parser allows `/` in symbol names at line 71)
+- Core semantics treat namespaced symbols as ordinary symbols (naming convention only)
+- **Implementation tasks**:
+  - Verify parser correctly handles `/` in symbol names ✅ (already supported)
+  - Future: Enhanced namespace resolution for module system (deferred)
+
+**Rationale**: These features are essential for Pattern Lisp's design goal of clean interoperability with gram notation and support for structured data. Maps and keywords are fundamental data structures that enable configuration, tagged unions, and structured state representation. The postfix keyword syntax (`name:`) distinguishes keys from labels (`:Person`), enabling unambiguous parsing while maintaining gram notation compatibility.
+
+**Priority**: High - These are core language features described in the syntax conventions document and are needed for complete language support.
+
+### Planned Features from Design Documents
+
+**From `docs/pattern-state-lisp-design.md`:**
+
+**Phase 3: Host-Call Boundary** (Not Yet Implemented)
+- Host function registry
+- Side effect evaluation via `(host-call 'name args...)` form
+- Error handling for I/O failures
+- Standard host functions: file-read, file-write, http-get, http-post, db-query, db-execute, exec
+- Pattern persistence via host-calls
+
+**Phase 4: Graph Lens Integration** (Not Yet Implemented)
+- Graph Lens construction in Lisp: `(graph-lens scope-pattern node-predicate)`
+- Node/relationship queries: `(nodes lens)`, `(relationships lens)`
+- Graph navigation primitives: `(neighbors lens node)`, `(degree lens node)`, `(connected-components lens)`, `(find-path lens start end)`
+- Enable state Pattern to function as a knowledge graph
+
+**Phase 5: Agent Runtime** (Partially Implemented)
+- Multi-tool execution (not yet implemented)
+- Execution tracing (RuntimeState has trace field, but not actively used)
+- State persistence via host-calls (not yet implemented)
+
+**Future Extensions** (Not Yet Implemented)
+- Parallel execution of tools operating on disjoint Pattern subtrees
+- Incremental updates: `(pattern-update-at "$.users[0]" update-fn state)`
+- Optimistic concurrency with state merging
+- Database-backed Patterns with transparent DB queries
+
+**From `docs/pattern-lisp-effect-system.md`:**
+
+**Effect System** (Not Yet Implemented - Design Document v0.1)
+- Minimal effect system for describing I/O and side effects
+- Effects as lazy descriptions (separation of description from execution)
+- Explicit error tracking in type system: `Effect<Success, Error, Requirements>`
+- Tier 1 operations: succeed, fail, sync, map, flatMap, catchAll, service
+- Tier 2 operations: async, try, die, pipe, do, either, catchTag, orElse, orDie, match, matchCause
+- Tier 3+ host-managed operations: with-timeout, with-delay, with-retry, with-resource, with-concurrency, race
+- Service architecture for dependency injection
+- Host implementation guide for effect interpretation
+
 **Language extensions**
 - Pattern matching on structured data
 - Module/namespace system

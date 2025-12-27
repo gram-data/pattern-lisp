@@ -1,8 +1,8 @@
 # Nested Scope Serialization Proposal
 
 **Date**: 2025-01-27  
-**Status**: Draft for Review  
-**Related**: `docs/plisp-serialization-design.md`
+**Status**: ✅ **IMPLEMENTED** - This proposal describes the current nested scope serialization implementation using inline `:Scope` patterns.  
+**Related**: `docs/plisp-serialization-design.md`, `src/PatternLisp/Codec.hs`
 
 ## Problem Statement
 

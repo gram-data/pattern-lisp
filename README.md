@@ -185,9 +185,9 @@ cabal run pattern-lisp -- examples/lists.plisp
 ### Using as a Library
 
 ```haskell
-import Lisp.Parser
-import Lisp.Eval
-import Lisp.Primitives
+import PatternLisp.Parser
+import PatternLisp.Eval
+import PatternLisp.Primitives
 
 main = do
   case parseExpr "(+ 1 2)" of
@@ -203,7 +203,7 @@ For more examples and detailed usage, see the [Quickstart Guide](specs/002-core-
 
 ```
 pattern-lisp/
-├── src/              # Library code (Lisp.* modules)
+├── src/              # Library code (PatternLisp.* modules)
 ├── app/              # CLI executable (Main.hs)
 ├── test/             # Test suite
 ├── examples/         # Example Lisp programs

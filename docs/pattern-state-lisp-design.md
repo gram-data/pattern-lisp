@@ -189,6 +189,8 @@ Pattern is a **native Lisp value type**, not accessed through host-calls.
 
 ### Graph Lens Integration
 
+**⚠️ Future: Phase 4 - Not Yet Implemented**
+
 ```scheme
 ;; Create a graph lens
 (graph-lens scope-pattern node-predicate)
@@ -205,6 +207,8 @@ Pattern is a **native Lisp value type**, not accessed through host-calls.
 The state Pattern becomes a **knowledge graph** that tools navigate and transform.
 
 ## Host-Call Boundary
+
+**⚠️ Future: Phase 3 - Not Yet Implemented**
 
 Since programs are pure, **host-calls** are the only mechanism for side effects:
 
@@ -403,31 +407,31 @@ Every tool execution produces a state transformation that can be:
 
 ## Implementation Phases
 
-### Phase 1: Pure Lisp with Pattern Values
-- S-expression parser
-- Evaluator with Pattern as native value type
-- Pattern primitive operations
-- Basic REPL
+### Phase 1: Pure Lisp with Pattern Values ✅ **IMPLEMENTED**
+- S-expression parser ✅
+- Evaluator with Pattern as native value type ✅
+- Pattern primitive operations ✅
+- Basic REPL ✅
 
-### Phase 2: Canonical Form Enforcement
-- Validate programs are `(lambda (state) ...)`
-- Tool definition parser from Gram
-- Runtime execution with state threading
+### Phase 2: Canonical Form Enforcement ✅ **IMPLEMENTED**
+- Validate programs are `(lambda (state) ...)` ✅
+- Tool definition parser from Gram ✅
+- Runtime execution with state threading ✅
 
-### Phase 3: Host-Call Boundary
+### Phase 3: Host-Call Boundary ⚠️ **NOT YET IMPLEMENTED**
 - Host function registry
 - Side effect evaluation
 - Error handling for I/O failures
 
-### Phase 4: Graph Lens Integration
+### Phase 4: Graph Lens Integration ⚠️ **NOT YET IMPLEMENTED**
 - Graph Lens construction in Lisp
 - Node/relationship queries
 - Graph navigation primitives
 
-### Phase 5: Agent Runtime
-- Multi-tool execution
-- Execution tracing
-- State persistence (via host-calls)
+### Phase 5: Agent Runtime ⚠️ **PARTIALLY IMPLEMENTED**
+- Multi-tool execution (not yet implemented)
+- Execution tracing (RuntimeState has trace field, but not actively used)
+- State persistence (via host-calls) (not yet implemented)
 
 ## Design Constraints and Trade-offs
 
@@ -455,6 +459,8 @@ Every tool execution produces a state transformation that can be:
 The gains significantly outweigh the costs for the Pattern Agent use case.
 
 ## Future Extensions
+
+**⚠️ Future: Not Yet Implemented - Planned Features**
 
 ### Parallel Execution
 

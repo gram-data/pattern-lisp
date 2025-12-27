@@ -1,6 +1,8 @@
 # Pattern-Lisp Effect System
 
-## Design Document v0.1
+**⚠️ Future: Not Yet Implemented - Design Document v0.1**
+
+This document describes a planned effect system for Pattern Lisp. The features described here are **not yet implemented** in the current codebase.
 
 ### Overview
 
