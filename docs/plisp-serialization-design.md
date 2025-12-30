@@ -606,7 +606,7 @@ Every Pattern Lisp runtime provides a standard environment (`initialEnv`) contai
 - Arithmetic primitives: `+`, `-`, `*`, `/`
 - Comparison primitives: `>`, `<`, `=`, `/=`
 - String primitives: `string-append`, `string-length`, `substring`
-- Pattern primitives: `pattern`, `pattern-with`, `pattern-value`, etc.
+- Pattern primitives: `pure`, `pattern`, `pattern-value`, etc.
 
 ### Environment Filtering
 
@@ -1245,10 +1245,10 @@ Pattern Subject → Check Label:
 **S-expression**:
 ```scheme
 (lambda (state)
-  (pattern-with
+  (pattern
     (pattern-value state)
     (cons
-      (pattern "new-item")
+      (pure "new-item")
       (pattern-elements state))))
 ```
 
@@ -1262,7 +1262,7 @@ Pattern Subject → Check Label:
     [:Parameters | state],
     [:Body |
       [:List |
-        [:Symbol {name: "pattern-with"}],
+        [:Symbol {name: "pattern"}],
         [:List | [:Symbol {name: "pattern-value"}], state],
         [:List |
           [:Symbol {name: "cons"}],

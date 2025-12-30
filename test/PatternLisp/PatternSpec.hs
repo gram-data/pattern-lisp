@@ -10,8 +10,8 @@ import qualified Data.Text as T
 spec :: Spec
 spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
   describe "Pattern construction" $ do
-    it "pattern construction creates atomic pattern" $ do
-      case parseExpr "(pattern \"hello\")" of
+    it "pure creates atomic pattern" $ do
+      case parseExpr "(pure \"hello\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -19,8 +19,8 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
             VPattern _ -> True `shouldBe` True
             _ -> fail $ "Expected VPattern, got: " ++ show val
     
-    it "pattern-with creates pattern with elements" $ do
-      case parseExpr "(pattern-with \"root\" '())" of
+    it "pattern creates pattern with elements" $ do
+      case parseExpr "(pattern \"root\" '())" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -30,14 +30,14 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
   
   describe "Pattern queries" $ do
     it "pattern-value extracts decoration correctly" $ do
-      case parseExpr "(pattern-value (pattern \"hello\"))" of
+      case parseExpr "(pattern-value (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VString (T.pack "hello")
     
     it "pattern-elements returns list of VPattern elements" $ do
-      case parseExpr "(pattern-elements (pattern-with \"root\" '()))" of
+      case parseExpr "(pattern-elements (pattern \"root\" '()))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -46,28 +46,28 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
             _ -> fail $ "Expected empty list, got: " ++ show val
     
     it "pattern-length returns correct direct element count" $ do
-      case parseExpr "(pattern-length (pattern-with \"root\" '()))" of
+      case parseExpr "(pattern-length (pattern \"root\" '()))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VNumber 0
     
     it "pattern-size counts all nodes recursively" $ do
-      case parseExpr "(pattern-size (pattern \"hello\"))" of
+      case parseExpr "(pattern-size (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VNumber 1
     
     it "pattern-depth returns max depth correctly" $ do
-      case parseExpr "(pattern-depth (pattern \"hello\"))" of
+      case parseExpr "(pattern-depth (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VNumber 0
     
     it "pattern-values flattens all values" $ do
-      case parseExpr "(pattern-values (pattern \"hello\"))" of
+      case parseExpr "(pattern-values (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -77,9 +77,9 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
     
     it "nested patterns work correctly" $ do
       -- Test with a pattern containing another pattern
-      -- Use pattern-with with empty list for now (nested pattern construction
+      -- Use pattern with empty list for now (nested pattern construction
       -- with multiple elements will be tested when list primitives are available)
-      case parseExpr "(let ((p1 (pattern \"child\"))) (pattern-with \"root\" '()))" of
+      case parseExpr "(let ((p1 (pure \"child\"))) (pattern \"root\" '()))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -104,7 +104,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected ArityMismatch error"
       
-      case parseExpr "(pattern-elements (pattern \"a\") (pattern \"b\"))" of
+      case parseExpr "(pattern-elements (pure \"a\") (pure \"b\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left (ArityMismatch _ _ _) -> True `shouldBe` True
@@ -114,7 +114,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
   describe "Pattern predicates" $ do
     it "pattern-find finds matching subpattern" $ do
       -- Test pattern-find on atomic pattern that matches (using numbers since = only works for numbers)
-      case parseExpr "(pattern-find (pattern 42) (lambda (p) (= (pattern-value p) 42)))" of
+      case parseExpr "(pattern-find (pure 42) (lambda (p) (= (pattern-value p) 42)))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -124,7 +124,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
     
     it "pattern-find returns nothing if no match" $ do
       -- Test pattern-find on atomic pattern that doesn't match
-      case parseExpr "(pattern-find (pattern 1) (lambda (p) (= (pattern-value p) 3)))" of
+      case parseExpr "(pattern-find (pure 1) (lambda (p) (= (pattern-value p) 3)))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -134,7 +134,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
     
     it "pattern-any? checks existence correctly" $ do
       -- Test pattern-any? on atomic pattern that matches
-      case parseExpr "(pattern-any? (pattern 42) (lambda (p) (= (pattern-value p) 42)))" of
+      case parseExpr "(pattern-any? (pure 42) (lambda (p) (= (pattern-value p) 42)))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -142,7 +142,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
     
     it "pattern-all? checks universal property correctly" $ do
       -- Test pattern-all? on atomic pattern
-      case parseExpr "(pattern-all? (pattern 10) (lambda (p) (= (pattern-value p) 10)))" of
+      case parseExpr "(pattern-all? (pure 10) (lambda (p) (= (pattern-value p) 10)))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -151,14 +151,14 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
     it "pattern predicates work with closures" $ do
       -- Test that predicates can be closures with captured environment
       -- Use nested let to define variables in sequence
-      case parseExpr "(let ((target-val 42)) (let ((pred (lambda (p) (= (pattern-value p) target-val)))) (let ((p1 (pattern target-val))) (pattern-any? p1 pred))))" of
+      case parseExpr "(let ((target-val 42)) (let ((pred (lambda (p) (= (pattern-value p) target-val)))) (let ((p1 (pure target-val))) (pattern-any? p1 pred))))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VBool True
     
     it "pattern-find type error for non-closure predicate" $ do
-      case parseExpr "(pattern-find (pattern 1) \"not-a-closure\")" of
+      case parseExpr "(pattern-find (pure 1) \"not-a-closure\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left (TypeMismatch _ _) -> True `shouldBe` True

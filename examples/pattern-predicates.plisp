@@ -9,9 +9,9 @@
 ;; ============================================================================
 
 ;; Create some atomic patterns for testing
-(define p1 (pattern 10))
-(define p2 (pattern 20))
-(define p3 (pattern 30))
+(define p1 (pure 10))
+(define p2 (pure 20))
+(define p3 (pure 30))
 
 ;; pattern-find: Find the first matching subpattern
 ;; Returns the matching pattern, or empty list if no match

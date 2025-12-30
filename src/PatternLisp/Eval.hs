@@ -222,13 +222,14 @@ applyPrimitive Substring args = case args of
       then throwError $ TypeMismatch "Invalid substring indices" (VList [])
       else return $ VString $ T.take (endIdx - startIdx) $ T.drop startIdx str
   _ -> throwError $ ArityMismatch "substring" 3 (length args)
-applyPrimitive PatternCreate args = case args of
+applyPrimitive Pure args = case args of
   [val] -> evalPatternCreate val
-  _ -> throwError $ ArityMismatch "pattern" 1 (length args)
-applyPrimitive PatternWith args = case args of
+  _ -> throwError $ ArityMismatch "pure" 1 (length args)
+applyPrimitive PatternCreate args = case args of
   [decoration, VList elements] -> evalPatternWith decoration elements
-  [_, _] -> throwError $ TypeMismatch "pattern-with expects list of elements as second argument" (VList [])
-  _ -> throwError $ ArityMismatch "pattern-with" 2 (length args)
+  [_] -> throwError $ ArityMismatch "pattern" 2 (length args)
+  [_, _] -> throwError $ TypeMismatch "pattern expects list of elements as second argument" (VList [])
+  _ -> throwError $ ArityMismatch "pattern" 2 (length args)
 -- Pattern query primitives
 applyPrimitive PatternValue args = case args of
   [VPattern pat] -> evalPatternValue pat

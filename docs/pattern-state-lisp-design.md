@@ -38,7 +38,7 @@ Where:
 ```scheme
 ;; Pure function, runtime handles state threading
 (lambda (state)
-  (pattern-with 
+  (pattern 
     (pattern-value state)
     (cons new-item (pattern-elements state))))
 ```
@@ -54,7 +54,7 @@ Tools in Pattern Agents are naturally `Pattern v -> Pattern v` transformations:
 (lambda (state)
   (let* ((user (pattern-find state is-user?))
          (name (pattern-query user "$.name")))
-    (pattern-with 
+    (pattern 
       {:greeting (string-append "Hello, " name)}
       (pattern-elements state))))
 ```
@@ -72,7 +72,7 @@ Tools compose as functions:
 (define format-greeting
   (lambda (state)
     (let ((user (get-user state)))
-      (pattern {:greeting (string-append "Hello, " (pattern-value user))}))))
+      (pure {:greeting (string-append "Hello, " (pattern-value user))}))))
 
 ;; Compose: format-greeting ∘ get-user
 (define greet-user 
@@ -177,8 +177,8 @@ Pattern is a **native Lisp value type**, not accessed through host-calls.
 
 ```scheme
 ;; Pattern construction
-(pattern value)                    ; Atomic pattern
-(pattern-with value elements)      ; Pattern with elements
+(pure value)                       ; Atomic pattern
+(pattern value elements)          ; Pattern with elements
 (from-list value [v1 v2 v3])      ; Convenience constructor
 
 ;; Pattern transformation (returns new pattern)
@@ -220,7 +220,7 @@ Since programs are pure, **host-calls** are the only mechanism for side effects:
                         "SELECT * FROM users WHERE id = ?" 
                         user-id)))
       ;; Incorporate result into new state pattern
-      (pattern-with 
+      (pattern 
         {:query-result db-result}
         (pattern-elements state)))))
 ```
@@ -316,12 +316,12 @@ executeTool toolName runtime = do
              (db-result (host-call 'db-query 
                           "SELECT * FROM orders WHERE id = ?" 
                           order-id))
-             (order-pattern (pattern-with 
+             (order-pattern (pattern 
                              {:type "Order"
                               :id order-id
                               :data db-result}
                              [])))
-        (pattern-with
+        (pattern
           (pattern-value state)
           (cons order-pattern (pattern-elements state)))))
   ]
@@ -337,14 +337,14 @@ executeTool toolName runtime = do
          (db-result (host-call 'db-query 
                       "SELECT * FROM orders WHERE id = ?" 
                       order-id))
-         (order-pattern (pattern-with 
-                         {:type "Order"
-                          :id order-id
-                          :data db-result}
-                         [])))
-    (pattern-with
-      (pattern-value state)
-      (cons order-pattern (pattern-elements state)))))
+             (order-pattern (pattern 
+                             {:type "Order"
+                              :id order-id
+                              :data db-result}
+                             [])))
+        (pattern
+          (pattern-value state)
+          (cons order-pattern (pattern-elements state)))))
 ```
 
 ## Benefits for Pattern Agents

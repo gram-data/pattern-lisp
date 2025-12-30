@@ -2,10 +2,10 @@
 ;; Demonstrates creating and querying Pattern values
 
 ;; Create an atomic pattern
-(define hello (pattern "hello"))
+(define hello (pure "hello"))
 
 ;; Create a pattern with elements (empty for now)
-(define root (pattern-with "root" '()))
+(define root (pattern "root" '()))
 
 ;; Query pattern decoration
 (pattern-value hello)

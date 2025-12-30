@@ -63,7 +63,7 @@ module PatternLisp.Codec
 import PatternLisp.Syntax
 import PatternLisp.Primitives (initialEnv)
 import Pattern (Pattern)
-import Pattern.Core (pattern, patternWith)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
@@ -581,10 +581,10 @@ valueToSubjectForGram (VClosure _) = Subject
 -- This follows the design in docs/plisp-serialization-design.md
 -- This is a pure function for serialization (unlike PatternPrimitives.valueToPatternSubject which is monadic)
 valueToPatternSubjectForGram :: Value -> Pattern Subject
-valueToPatternSubjectForGram (VNumber n) = pattern $ valueToSubjectForGram (VNumber n)
-valueToPatternSubjectForGram (VString s) = pattern $ valueToSubjectForGram (VString s)
-valueToPatternSubjectForGram (VBool b) = pattern $ valueToSubjectForGram (VBool b)
-valueToPatternSubjectForGram (VKeyword name) = pattern $ valueToSubjectForGram (VKeyword name)
+valueToPatternSubjectForGram (VNumber n) = point $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGram (VString s) = point $ valueToSubjectForGram (VString s)
+valueToPatternSubjectForGram (VBool b) = point $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGram (VKeyword name) = point $ valueToSubjectForGram (VKeyword name)
 valueToPatternSubjectForGram (VMap m) = 
   -- Serialize map as pattern with elements: alternating key-value pairs
   -- Keys can be keywords or strings, each serialized appropriately
@@ -596,34 +596,34 @@ valueToPatternSubjectForGram (VMap m) =
       valuePatterns = map (\(_, v) -> valueToPatternSubjectForGram v) keyValuePairs
       -- Interleave keys and values: [key1, value1, key2, value2, ...]
       elements = concat $ zipWith (\k v -> [k, v]) keyPatterns valuePatterns
-  in patternWith (valueToSubjectForGram (VMap Map.empty)) elements
+  in pattern (valueToSubjectForGram (VMap Map.empty)) elements
 valueToPatternSubjectForGram (VSet s) = 
   -- Serialize set as pattern with elements: each element as a Pattern Subject
   let elements = map valueToPatternSubjectForGram (Set.toList s)
-  in patternWith (valueToSubjectForGram (VSet Set.empty)) elements
-valueToPatternSubjectForGram (VList vs) = patternWith
+  in pattern (valueToSubjectForGram (VSet Set.empty)) elements
+valueToPatternSubjectForGram (VList vs) = pattern
   (valueToSubjectForGram (VList []))
   (map valueToPatternSubjectForGram vs)
 valueToPatternSubjectForGram (VPattern pat) = 
   -- A VPattern value is semantically a Pattern Subject with label "Pattern"
   -- containing the inner pattern as an element.
   -- Example: (pattern 42) → [:Pattern | [:Number {value: 42}]]
-  patternWith (Subject { identity = SubjectCore.Symbol "", labels = Set.fromList ["Pattern"], properties = Map.empty }) [pat]
-valueToPatternSubjectForGram (VPrimitive prim) = pattern $ valueToSubjectForGram (VPrimitive prim)
+  pattern (Subject { identity = SubjectCore.Symbol "", labels = Set.fromList ["Pattern"], properties = Map.empty }) [pat]
+valueToPatternSubjectForGram (VPrimitive prim) = point $ valueToSubjectForGram (VPrimitive prim)
 valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
 
 -- | Internal version that uses State monad for scope ID generation
 -- This allows nested closures to share the same counter for unique IDs
 valueToPatternSubjectForGramWithState :: Value -> ScopeIdState (Pattern Subject)
-valueToPatternSubjectForGramWithState (VNumber n) = return $ pattern $ valueToSubjectForGram (VNumber n)
-valueToPatternSubjectForGramWithState (VString s) = return $ pattern $ valueToSubjectForGram (VString s)
-valueToPatternSubjectForGramWithState (VBool b) = return $ pattern $ valueToSubjectForGram (VBool b)
-valueToPatternSubjectForGramWithState (VKeyword name) = return $ pattern $ valueToSubjectForGram (VKeyword name)
+valueToPatternSubjectForGramWithState (VNumber n) = return $ point $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGramWithState (VString s) = return $ point $ valueToSubjectForGram (VString s)
+valueToPatternSubjectForGramWithState (VBool b) = return $ point $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGramWithState (VKeyword name) = return $ point $ valueToSubjectForGram (VKeyword name)
 valueToPatternSubjectForGramWithState (VMap m) = return $ valueToPatternSubjectForGram (VMap m)
 valueToPatternSubjectForGramWithState (VSet s) = return $ valueToPatternSubjectForGram (VSet s)
 valueToPatternSubjectForGramWithState (VList vs) = do
   elementPatterns <- mapM valueToPatternSubjectForGramWithState vs
-  return $ patternWith
+  return $ pattern
     (Subject
       { identity = SubjectCore.Symbol ""
       , labels = Set.fromList ["List"]
@@ -632,7 +632,7 @@ valueToPatternSubjectForGramWithState (VList vs) = do
     elementPatterns
 valueToPatternSubjectForGramWithState (VPattern pat) = 
   -- VPattern wraps a Pattern Subject - we need to wrap it with :Pattern label
-  return $ patternWith
+  return $ pattern
     (Subject
       { identity = SubjectCore.Symbol ""
       , labels = Set.fromList ["Pattern"]
@@ -640,7 +640,7 @@ valueToPatternSubjectForGramWithState (VPattern pat) =
       })
     [pat]
 valueToPatternSubjectForGramWithState (VClosure closure) = closureToPatternSubjectWithState closure
-valueToPatternSubjectForGramWithState (VPrimitive prim) = return $ pattern $ valueToSubjectForGram (VPrimitive prim)
+valueToPatternSubjectForGramWithState (VPrimitive prim) = return $ point $ valueToSubjectForGram (VPrimitive prim)
 
 -- | Converts a Pattern Subject back to a Value.
 -- This is the inverse of valueToPatternSubject.
@@ -742,7 +742,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = map exprToPatternSubjectPure [cond, thenExpr, elseExpr]
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
     (Atom (Symbol "let")):bindingsExpr:bodyExpr:[] ->
       -- Let special form: [:Let | bindings, body]
       let decoration = Subject
@@ -751,7 +751,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = map exprToPatternSubjectPure [bindingsExpr, bodyExpr]
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
     (Atom (Symbol "begin")):rest ->
       -- Begin special form: [:Begin | expr1, expr2, ...]
       let decoration = Subject
@@ -760,7 +760,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = map exprToPatternSubjectPure rest
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
     (Atom (Symbol "define")):nameExpr:valueExpr:[] ->
       -- Define special form: [:Define | name, value]
       let decoration = Subject
@@ -769,7 +769,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = map exprToPatternSubjectPure [nameExpr, valueExpr]
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
     (Atom (Symbol "quote")):expr:[] ->
       -- Quote special form: [:Quote | expr]
       let decoration = Subject
@@ -778,7 +778,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = [exprToPatternSubjectPure expr]
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
     _ ->
       -- Regular function call or list: [:List | ...]
       let decoration = Subject
@@ -787,7 +787,7 @@ exprToPatternSubjectPure (List exprs) =
             , properties = Map.empty
             }
           elementPatterns = map exprToPatternSubjectPure exprs
-      in patternWith decoration elementPatterns
+      in pattern decoration elementPatterns
 exprToPatternSubjectPure (Quote expr) =
   -- Quote expression: [:Quote | expr]
   let decoration = Subject
@@ -796,11 +796,11 @@ exprToPatternSubjectPure (Quote expr) =
         , properties = Map.empty
         }
       elementPatterns = [exprToPatternSubjectPure expr]
-  in patternWith decoration elementPatterns
+  in pattern decoration elementPatterns
 exprToPatternSubjectPure expr =
   -- For atoms: convert to Subject, then wrap in atomic pattern
   let subject = exprToSubject expr
-      pat = pattern subject
+      pat = point subject
   in pat
 
 -- | Binding information for serialization
@@ -873,12 +873,12 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , labels = Set.fromList ["Symbol"]
                   , properties = Map.fromList [("name", SubjectValue.VString name)]
                   }
-            in pattern subject
+            in point subject
           else case Map.lookup name bindingMap' of
             Just identifier ->
               -- Bound variable: create identifier reference pattern
               -- Identifier reference is a pattern with just the identifier (empty labels)
-              pattern $ Subject
+              point $ Subject
                 { identity = identifier
                 , labels = Set.empty
                 , properties = Map.empty
@@ -890,7 +890,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                     , labels = Set.fromList ["Symbol"]
                     , properties = Map.fromList [("name", SubjectValue.VString name)]
                     }
-              in pattern subject
+              in point subject
       -- Lists: handle special forms and function calls
       List exprs' ->
         case exprs' of
@@ -901,7 +901,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [cond, thenExpr, elseExpr]
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
           (Atom (Symbol "let")):bindingsExpr:bodyExpr:[] ->
             let decoration = Subject
                   { identity = SubjectCore.Symbol ""
@@ -909,7 +909,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [bindingsExpr, bodyExpr]
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
           (Atom (Symbol "begin")):rest ->
             let decoration = Subject
                   { identity = SubjectCore.Symbol ""
@@ -917,7 +917,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') rest
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
           (Atom (Symbol "define")):nameExpr:valueExpr:[] ->
             let decoration = Subject
                   { identity = SubjectCore.Symbol ""
@@ -925,7 +925,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') [nameExpr, valueExpr]
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
           (Atom (Symbol "quote")):expr'':[] ->
             let decoration = Subject
                   { identity = SubjectCore.Symbol ""
@@ -933,7 +933,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = [transformExprWithBindings expr'' bindingMap' paramNames']
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
           _ ->
             -- Regular function call or list
             let decoration = Subject
@@ -942,7 +942,7 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
                   , properties = Map.empty
                   }
                 elementPatterns = map (\e -> transformExprWithBindings e bindingMap' paramNames') exprs'
-            in patternWith decoration elementPatterns
+            in pattern decoration elementPatterns
       -- Quote: transform the inner expression
       Quote expr'' ->
         let decoration = Subject
@@ -951,11 +951,11 @@ exprToPatternSubjectWithBindings expr bindingMap paramNames
               , properties = Map.empty
               }
             elementPatterns = [transformExprWithBindings expr'' bindingMap' paramNames']
-        in patternWith decoration elementPatterns
+        in pattern decoration elementPatterns
       -- Other atoms: convert normally
       _ ->
         let subject = exprToSubject expr'
-        in pattern subject
+        in point subject
 
 -- | State for tracking scope ID generation
 type ScopeIdState = State Int
@@ -989,18 +989,18 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
       bodyPattern = exprToPatternSubjectWithBindings bodyExpr bindingMap paramNames
       -- Create parameters pattern with parameter names as elements
       -- Each parameter is a Symbol pattern
-      paramPatterns = map (\name -> pattern $ Subject
+      paramPatterns = map (\name -> point $ Subject
         { identity = SubjectCore.Symbol ""
         , labels = Set.fromList ["Symbol"]
         , properties = Map.fromList [("name", SubjectValue.VString name)]
         }) paramNames
       paramsPattern = if null paramPatterns
-        then pattern $ Subject
+        then point $ Subject
           { identity = SubjectCore.Symbol ""
           , labels = Set.fromList ["Parameters"]
           , properties = Map.empty
           }
-        else patternWith
+        else pattern
           (Subject
             { identity = SubjectCore.Symbol ""
             , labels = Set.fromList ["Parameters"]
@@ -1017,7 +1017,7 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
       -- For nested closures: When a closure captures another closure, the captured closure's
       -- scope should reference the capturing closure's scope as its parent to preserve
       -- the lexical scope hierarchy.
-      parentScopeRef = pattern $ Subject
+      parentScopeRef = point $ Subject
         { identity = SubjectCore.Symbol ""  -- Empty identity = program-level
         , labels = Set.empty
         , properties = Map.empty
@@ -1044,19 +1044,19 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
             case nestedScopeElements of
               [] -> return nestedClosurePat  -- Shouldn't happen
               (_oldParentRef : nestedBindings) -> do
-                let newParentRef = pattern $ Subject
+                let newParentRef = point $ Subject
                       { identity = scopeId  -- Reference to this closure's scope
                       , labels = Set.empty
                       , properties = Map.empty
                       }
                     newNestedScopeElements = newParentRef : nestedBindings
-                    newNestedScopePat = patternWith nestedScopeSubj newNestedScopeElements
+                    newNestedScopePat = pattern nestedScopeSubj newNestedScopeElements
                     newNestedElements = newNestedScopePat : restNestedElements
-                return $ patternWith (PatternCore.value nestedClosurePat) newNestedElements
+                return $ pattern (PatternCore.value nestedClosurePat) newNestedElements
       _ -> do
         -- Not a closure - serialize normally
         valueToPatternSubjectForGramWithState (bindingValue bi)
-    return $ patternWith
+    return $ pattern
       (Subject
         { identity = bindingIdentifier bi
         , labels = Set.fromList ["Binding"]
@@ -1067,7 +1067,7 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
   -- Build :Scope pattern elements: [parent_ref, binding1, binding2, ...]
   -- Always include parent reference (even if empty for program-level)
   let scopeElements = parentScopeRef : bindingPatterns
-      scopePattern = patternWith
+      scopePattern = pattern
         (Subject
           { identity = scopeId
           , labels = Set.fromList ["Scope"]
@@ -1075,14 +1075,14 @@ closureToPatternSubjectWithState (Closure paramNames bodyExpr capturedEnv) = do
           })
         scopeElements
       -- Create lambda pattern with parameters and body
-      lambdaPattern = patternWith
+      lambdaPattern = pattern
         (Subject
           { identity = SubjectCore.Symbol ""
           , labels = Set.fromList ["Lambda"]
           , properties = Map.empty
           })
         [paramsPattern, bodyPattern]
-  return $ patternWith
+  return $ pattern
     (Subject
       { identity = SubjectCore.Symbol ""
       , labels = Set.fromList ["Closure"]
@@ -1429,7 +1429,7 @@ extractParamName pat = do
 programToGram :: [Value] -> Env -> String
 programToGram values _runtimeEnv = 
   -- Create file-level property record pattern
-  let fileMetadata = patternWith
+  let fileMetadata = pattern
         (Subject
           { identity = SubjectCore.Symbol ""
           , labels = Set.empty

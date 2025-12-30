@@ -9,7 +9,7 @@ import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue, e
 import PatternLisp.Gram (patternToGram, gramToPattern)
 import PatternLisp.Syntax (Error(..), MapKey(..), KeywordKey(..))
 import Pattern (Pattern)
-import Pattern.Core (pattern, patternWith)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
@@ -20,7 +20,7 @@ import qualified Data.Set as Set
 
 -- Helper to create a simple Pattern Subject for testing
 createTestPattern :: String -> Pattern Subject
-createTestPattern s = pattern $ Subject
+createTestPattern s = point $ Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
   , properties = Map.fromList [("text", SubjectValue.VString s)]
@@ -159,7 +159,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
     
     it "missing primitive in registry errors correctly" $ do
       -- Create a pattern with an invalid primitive name
-      let invalidPat = pattern $ Subject
+      let invalidPat = point $ Subject
             { identity = SubjectCore.Symbol ""
             , labels = Set.fromList ["Primitive"]
             , properties = Map.fromList [("name", SubjectValue.VString "invalid-primitive")]
@@ -286,7 +286,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
   describe "Error handling" $ do
     it "invalid pattern structures error correctly" $ do
       -- Test with missing properties in Number pattern
-      let invalidPat = pattern $ Subject
+      let invalidPat = point $ Subject
             { identity = SubjectCore.Symbol ""
             , labels = Set.fromList ["Number"]
             , properties = Map.empty  -- Missing "value" property

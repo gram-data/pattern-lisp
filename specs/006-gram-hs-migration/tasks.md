@@ -24,9 +24,9 @@
 
 **Purpose**: Verify prerequisites and understand migration requirements
 
-- [ ] T001 Verify updated gram-hs library is available and compatible with current GHC version
-- [ ] T002 Read migration guide at `../gram-hs/docs/users/migration/rename-constructors.md` and understand breaking changes
-- [ ] T003 Verify existing test suite passes before migration: `cabal test`
+- [x] T001 Verify updated gram-hs library is available and compatible with current GHC version
+- [x] T002 Read migration guide at `../gram-hs/docs/users/migration/rename-constructors.md` and understand breaking changes
+- [x] T003 Verify existing test suite passes before migration: `cabal test`
 
 **Checkpoint**: Prerequisites verified - ready to begin migration
 
@@ -40,15 +40,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] Update import in `src/PatternLisp/Codec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
-- [ ] T005 [P] [US1] Update import in `src/PatternLisp/PatternPrimitives.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
-- [ ] T006 [P] [US1] Update import in `src/PatternLisp/Gram.hs`: Change `import Pattern.Core (pattern)` to `import Pattern.Core (point, pattern)`
-- [ ] T007 [P] [US1] Update import in `test/PatternLisp/CodecSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
-- [ ] T008 [P] [US1] Update import in `test/PatternLisp/GramSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
-- [ ] T009 [P] [US1] Update import in `test/PatternLisp/GramSerializationSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
-- [ ] T010 [P] [US1] Update import in `test/PatternLisp/RuntimeSpec.hs`: Change `import Pattern.Core (pattern)` to `import Pattern.Core (point, pattern)`
-- [ ] T011 [US1] Verify all imports updated: Run `grep -r "patternWith" src/ test/ | grep -i import` to confirm no old imports remain
-- [ ] T012 [US1] Verify compilation: Run `cabal build` to ensure no import-related errors
+- [x] T004 [P] [US1] Update import in `src/PatternLisp/Codec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
+- [x] T005 [P] [US1] Update import in `src/PatternLisp/PatternPrimitives.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
+- [x] T006 [P] [US1] Update import in `src/PatternLisp/Gram.hs`: Change `import Pattern.Core (pattern)` to `import Pattern.Core (point, pattern)`
+- [x] T007 [P] [US1] Update import in `test/PatternLisp/CodecSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
+- [x] T008 [P] [US1] Update import in `test/PatternLisp/GramSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
+- [x] T009 [P] [US1] Update import in `test/PatternLisp/GramSerializationSpec.hs`: Change `import Pattern.Core (pattern, patternWith)` to `import Pattern.Core (point, pattern)`
+- [x] T010 [P] [US1] Update import in `test/PatternLisp/RuntimeSpec.hs`: Change `import Pattern.Core (pattern)` to `import Pattern.Core (point, pattern)`
+- [x] T011 [US1] Verify all imports updated: Run `grep -r "patternWith" src/ test/ | grep -i import` to confirm no old imports remain
+- [x] T012 [US1] Verify compilation: Run `cabal build` to ensure no import-related errors
 
 **Checkpoint**: All imports updated - code should compile (may have errors from old constructor usage, which is expected)
 
@@ -62,12 +62,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/Codec.hs`: Find all `pattern $` and `pattern subject` (single argument) and replace with `point $` and `point subject`
-- [ ] T014 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/PatternPrimitives.hs`: Find all `pattern subject` (single argument) and replace with `point subject`
-- [ ] T015 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/Gram.hs`: Replace `pattern subject` with `point subject` in `exprToGram` function
-- [ ] T016 [P] [US2] Replace atomic `pattern` calls in `test/PatternLisp/RuntimeSpec.hs`: Replace any atomic `pattern` calls with `point`
-- [ ] T017 [US2] Verify atomic patterns migrated: Run `grep -r "pattern \$" src/ test/` and `grep -r "pattern [^W]" src/ test/` to check for remaining atomic patterns (excluding `patternWith`)
-- [ ] T018 [US2] Verify compilation: Run `cabal build` to ensure atomic pattern replacements are correct
+- [x] T013 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/Codec.hs`: Find all `pattern $` and `pattern subject` (single argument) and replace with `point $` and `point subject`
+- [x] T014 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/PatternPrimitives.hs`: Find all `pattern subject` (single argument) and replace with `point subject`
+- [x] T015 [P] [US2] Replace atomic `pattern` calls in `src/PatternLisp/Gram.hs`: Replace `pattern subject` with `point subject` in `exprToGram` function
+- [x] T016 [P] [US2] Replace atomic `pattern` calls in `test/PatternLisp/RuntimeSpec.hs`: Replace any atomic `pattern` calls with `point`
+- [x] T017 [US2] Verify atomic patterns migrated: Run `grep -r "pattern \$" src/ test/` and `grep -r "pattern [^W]" src/ test/` to check for remaining atomic patterns (excluding `patternWith`)
+- [x] T018 [US2] Verify compilation: Run `cabal build` to ensure atomic pattern replacements are correct
 
 **Checkpoint**: All atomic patterns use `point` - compilation should succeed for atomic patterns
 
@@ -81,13 +81,13 @@
 
 ### Implementation for User Story 3
 
-- [ ] T019 [P] [US3] Replace `patternWith` calls in `src/PatternLisp/Codec.hs`: Replace all ~30+ occurrences of `patternWith` with `pattern`
-- [ ] T020 [P] [US3] Replace `patternWith` calls in `src/PatternLisp/PatternPrimitives.hs`: Replace all 4 occurrences of `patternWith` with `pattern`
-- [ ] T021 [P] [US3] Replace `patternWith` calls in `test/PatternLisp/GramSpec.hs`: Replace `patternWith` with `pattern`
-- [ ] T022 [P] [US3] Replace `patternWith` calls in `test/PatternLisp/GramSerializationSpec.hs`: Replace `patternWith` with `pattern`
-- [ ] T023 [US3] Verify all `patternWith` replaced: Run `grep -r "patternWith" src/ test/` to confirm no function calls remain (comments may still reference)
-- [ ] T024 [US3] Verify compilation: Run `cabal build` to ensure all `patternWith` replacements are correct
-- [ ] T025 [US3] Verify nested patterns: Check that nested patterns correctly use `point` for atomic children and `pattern` for non-atomic children
+- [x] T019 [P] [US3] Replace `patternWith` calls in `src/PatternLisp/Codec.hs`: Replace all ~30+ occurrences of `patternWith` with `pattern`
+- [x] T020 [P] [US3] Replace `patternWith` calls in `src/PatternLisp/PatternPrimitives.hs`: Replace all 4 occurrences of `patternWith` with `pattern`
+- [x] T021 [P] [US3] Replace `patternWith` calls in `test/PatternLisp/GramSpec.hs`: Replace `patternWith` with `pattern`
+- [x] T022 [P] [US3] Replace `patternWith` calls in `test/PatternLisp/GramSerializationSpec.hs`: Replace `patternWith` with `pattern`
+- [x] T023 [US3] Verify all `patternWith` replaced: Run `grep -r "patternWith" src/ test/` to confirm no function calls remain (comments may still reference)
+- [x] T024 [US3] Verify compilation: Run `cabal build` to ensure all `patternWith` replacements are correct
+- [x] T025 [US3] Verify nested patterns: Check that nested patterns correctly use `point` for atomic children and `pattern` for non-atomic children
 
 **Checkpoint**: All `patternWith` calls replaced with `pattern` - full migration of constructor calls complete
 
@@ -101,12 +101,12 @@
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Search for remaining `patternWith` function calls: Run `grep -r "patternWith" src/ test/` and verify only comments/documentation references remain
-- [ ] T027 [US4] Search for incorrect atomic `pattern` usage: Run `grep -r "pattern \$" src/ test/` and verify all are intentional (not atomic patterns that should be `point`)
-- [ ] T028 [US4] Verify compilation: Run `cabal build` and ensure zero errors related to Pattern constructors
-- [ ] T029 [US4] Run full test suite: Execute `cabal test` and verify 100% test pass rate
-- [ ] T030 [US4] Test example programs: Run example programs through interpreter and verify they produce same results as before migration
-- [ ] T031 [US4] Verify serialization round-trips: Test pattern serialization/deserialization for all pattern types (atomic, lists, maps, sets, closures, nested)
+- [x] T026 [US4] Search for remaining `patternWith` function calls: Run `grep -r "patternWith" src/ test/` and verify only comments/documentation references remain
+- [x] T027 [US4] Search for incorrect atomic `pattern` usage: Run `grep -r "pattern \$" src/ test/` and verify all are intentional (not atomic patterns that should be `point`)
+- [x] T028 [US4] Verify compilation: Run `cabal build` and ensure zero errors related to Pattern constructors
+- [x] T029 [US4] Run full test suite: Execute `cabal test` and verify 100% test pass rate
+- [x] T030 [US4] Test example programs: Run example programs through interpreter and verify they produce same results as before migration
+- [x] T031 [US4] Verify serialization round-trips: Test pattern serialization/deserialization for all pattern types (atomic, lists, maps, sets, closures, nested)
 
 **Checkpoint**: Migration verified complete - all tests pass, no old API usage remains
 
@@ -116,13 +116,13 @@
 
 **Purpose**: Update code comments and documentation examples to reflect new API
 
-- [ ] T032 [P] Update Haddock examples in `src/PatternLisp/PatternPrimitives.hs`: Replace `evalPatternWith` example comments to use new API if they reference constructors
-- [ ] T033 [P] Update inline comments in `src/PatternLisp/Codec.hs`: Review and update any comments that reference old constructor names
-- [ ] T034 [P] Update module documentation examples: Review module headers for example code snippets referencing old API
-- [ ] T035 [P] Update comments in `test/PatternLisp/` files: Review test file comments for old API references
-- [ ] T036 Verify comment updates: Run final `grep -r "patternWith" src/ test/` to confirm only historical references remain (if any)
-- [ ] T037 Final compilation check: Run `cabal build` one final time
-- [ ] T038 Final test check: Run `cabal test` one final time to ensure everything still works
+- [x] T032 [P] Update Haddock examples in `src/PatternLisp/PatternPrimitives.hs`: Replace `evalPatternWith` example comments to use new API if they reference constructors
+- [x] T033 [P] Update inline comments in `src/PatternLisp/Codec.hs`: Review and update any comments that reference old constructor names
+- [x] T034 [P] Update module documentation examples: Review module headers for example code snippets referencing old API
+- [x] T035 [P] Update comments in `test/PatternLisp/` files: Review test file comments for old API references
+- [x] T036 Verify comment updates: Run final `grep -r "patternWith" src/ test/` to confirm only historical references remain (if any)
+- [x] T037 Final compilation check: Run `cabal build` one final time
+- [x] T038 Final test check: Run `cabal test` one final time to ensure everything still works
 
 **Checkpoint**: Migration complete - code, tests, and documentation all updated
 
