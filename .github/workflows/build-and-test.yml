@@ -37,7 +37,6 @@ jobs:
           ~/.cabal/packages
         key: ${{ runner.os }}-cabal-${{ matrix.ghc-version }}-${{ hashFiles('cabal.project', 'pattern-lisp.cabal') }}
         restore-keys: |
-          ${{ runner.os }}-cabal-${{ matrix.ghc-version }}-${{ hashFiles('cabal.project', 'pattern-lisp.cabal') }}-
           ${{ runner.os }}-cabal-${{ matrix.ghc-version }}-
     
     - name: Cache dist-newstyle
@@ -51,9 +50,6 @@ jobs:
     - name: Configure Cabal
       run: |
         cabal update
-        # Force update of source-repository-packages to get latest gram-hs
-        # This ensures we get the latest version with 'point' export
-        cabal v2-update
     
     - name: Build project
       run: cabal build --ghc-options="-Wall" all
