@@ -7,7 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Runtime
 import Pattern (Pattern)
-import Pattern.Core (pattern)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
@@ -18,7 +18,7 @@ import qualified Data.Set as Set
 
 -- Helper to create a simple Pattern Subject for testing
 createTestPattern :: String -> Pattern Subject
-createTestPattern s = pattern $ Subject
+createTestPattern s = point $ Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
   , properties = Map.fromList [("text", SubjectValue.VString s)]
@@ -78,8 +78,8 @@ spec = describe "PatternLisp.Runtime - Pure Function State Transformation" $ do
                 properties inputSubj `shouldBe` properties outputSubj
     
     it "tool execution: tool transforms state correctly" $ do
-      -- Tool that adds a new element (simplified - using pattern-with)
-      case parseExpr "(lambda (state) (pattern-with \"transformed\" '()))" of
+      -- Tool that adds a new element (simplified - using pattern)
+      case parseExpr "(lambda (state) (pattern \"transformed\" '()))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case validateTool expr initialEnv of
           Left err -> fail $ "Validation error: " ++ show err

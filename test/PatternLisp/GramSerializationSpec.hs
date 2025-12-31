@@ -9,7 +9,7 @@ import PatternLisp.Gram
 import PatternLisp.PatternPrimitives
 import PatternLisp.Codec (patternSubjectToValue, valueToPatternSubjectForGram, programToGram, gramToProgram)
 import Pattern (Pattern)
-import Pattern.Core (pattern, patternWith)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import qualified Subject.Core as SubjectCore
@@ -228,7 +228,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "Round-trip: Complex structures" $ do
     it "pattern containing closures round-trips" $ do
       -- Create a pattern containing a closure
-      case parseExpr "(let ((f (lambda (x) (+ x 1)))) (pattern f))" of
+      case parseExpr "(let ((f (lambda (x) (+ x 1)))) (pure f))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err2 -> fail $ "Eval error: " ++ show err2
@@ -411,7 +411,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
     it "missing primitive in registry errors correctly" $ do
       -- Test that deserializing unknown primitive returns error
       -- Create a pattern with an unknown primitive name
-      let unknownPrimitivePat = patternWith
+      let unknownPrimitivePat = pattern
             (SubjectCore.Subject
               { SubjectCore.identity = SubjectCore.Symbol ""
               , SubjectCore.labels = Set.fromList ["Primitive"]

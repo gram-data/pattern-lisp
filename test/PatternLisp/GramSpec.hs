@@ -9,7 +9,7 @@ import PatternLisp.PatternPrimitives
 import PatternLisp.Gram
 import PatternLisp.Codec
 import Pattern (Pattern)
-import Pattern.Core (pattern, patternWith)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..), Symbol(..))
 import qualified Subject.Core as SubjectCore
@@ -22,7 +22,7 @@ import Control.Monad.Except (runExcept)
 
 -- | Helper to create a simple test pattern
 createTestPattern :: String -> Pattern Subject
-createTestPattern str = pattern $ SubjectCore.Subject
+createTestPattern str = point $ SubjectCore.Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
   , properties = Map.fromList [("text", SubjectValue.VString str)]
@@ -52,7 +52,7 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
             }
           element1 = createTestPattern "child1"
           element2 = createTestPattern "child2"
-          pat = patternWith decoration [element1, element2]
+          pat = pattern decoration [element1, element2]
           gramText = patternToGram pat
       case gramToPattern gramText of
         Left err -> fail $ "Parse error: " ++ show err
@@ -127,7 +127,7 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
             , labels = labelSet
             , properties = Map.fromList [("name", SubjectValue.VString "Alice")]
             }
-          pat = pattern subject
+          pat = point subject
           gramText = patternToGram pat
       -- Round-trip through gram notation
       case gramToPattern gramText of

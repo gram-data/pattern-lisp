@@ -126,8 +126,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
           Right _ -> fail "Expected ArityMismatch error"
   
   describe "Pattern construction operations" $ do
-    it "evaluates pattern construction (pattern \"hello\")" $ do
-      case parseExpr "(pattern \"hello\")" of
+    it "evaluates pure construction (pure \"hello\")" $ do
+      case parseExpr "(pure \"hello\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -135,8 +135,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
             VPattern _ -> True `shouldBe` True
             _ -> fail $ "Expected VPattern, got: " ++ show val
     
-    it "evaluates pattern-with construction (pattern-with \"root\" '())" $ do
-      case parseExpr "(pattern-with \"root\" '())" of
+    it "evaluates pattern construction (pattern \"root\" '())" $ do
+      case parseExpr "(pattern \"root\" '())" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -144,28 +144,28 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
             VPattern _ -> True `shouldBe` True
             _ -> fail $ "Expected VPattern, got: " ++ show val
     
-    -- Note: Testing pattern-with with multiple elements requires list construction
+    -- Note: Testing pattern with multiple elements requires list construction
     -- primitives that aren't yet available. This will be tested more comprehensively
     -- in Phase 3 when pattern query operations are implemented.
     
-    it "handles pattern arity mismatch" $ do
-      case parseExpr "(pattern)" of
+    it "handles pure arity mismatch" $ do
+      case parseExpr "(pure)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left (ArityMismatch _ _ _) -> True `shouldBe` True
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected ArityMismatch error"
     
-    it "handles pattern-with arity mismatch" $ do
-      case parseExpr "(pattern-with \"root\")" of
+    it "handles pattern arity mismatch (missing elements)" $ do
+      case parseExpr "(pattern \"root\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left (ArityMismatch _ _ _) -> True `shouldBe` True
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected ArityMismatch error"
     
-    it "handles pattern-with type error for non-list second argument" $ do
-      case parseExpr "(pattern-with \"root\" \"not-a-list\")" of
+    it "handles pattern type error for non-list second argument" $ do
+      case parseExpr "(pattern \"root\" \"not-a-list\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left (TypeMismatch _ _) -> True `shouldBe` True

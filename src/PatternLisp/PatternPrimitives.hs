@@ -9,8 +9,8 @@
 -- > import PatternLisp.PatternPrimitives
 -- > import PatternLisp.Eval
 -- >
--- > evalPatternCreate (VString "hello")  -- Creates atomic pattern
--- > evalPatternWith (VString "root") [pattern1, pattern2]  -- Creates pattern with elements
+-- > evalPatternCreate (VString "hello")  -- Creates atomic pattern (used by 'pure')
+-- > evalPatternWith (VString "root") [pattern1, pattern2]  -- Creates pattern with elements (used by 'pattern')
 module PatternLisp.PatternPrimitives
   ( evalPatternCreate
   , evalPatternWith
@@ -28,7 +28,7 @@ module PatternLisp.PatternPrimitives
 import PatternLisp.Syntax
 import PatternLisp.Codec
 import Pattern (Pattern)
-import Pattern.Core (pattern, patternWith)
+import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
@@ -57,11 +57,11 @@ exprToPatternSubject (List exprs) = do
         }
   -- Convert each element Expr to Pattern Subject recursively
   elementPatterns <- mapM exprToPatternSubject exprs
-  return $ patternWith decoration elementPatterns
+  return $ pattern decoration elementPatterns
 exprToPatternSubject expr = do
   -- For atoms and other Exprs: convert to Subject, then wrap in atomic pattern
   let subject = exprToSubject expr
-      pat = pattern subject
+      pat = point subject
   return pat
 
 -- | Creates an atomic Pattern from a Value.
@@ -87,7 +87,7 @@ evalPatternWith decorationVal elementVals = do
   -- Convert elements: expect VPattern values
   patternElements <- mapM expectPattern elementVals
   -- Create pattern with elements
-  let pat = patternWith decoration patternElements
+  let pat = pattern decoration patternElements
   return $ VPattern pat
 
 -- | Helper to extract Pattern from Value, or convert Value to Pattern
@@ -153,7 +153,7 @@ evalPatternValues pat = do
 -- This enables all s-expressions to be represented as Pattern Subject.
 -- 
 -- * VPattern: Returns the pattern directly
--- * VList: Converts to pattern-with with elements (empty list becomes atomic pattern)
+-- * VList: Converts to pattern with elements (empty list becomes atomic pattern)
 -- * Other values: Converts to Subject and wraps in atomic pattern
 valueToPatternSubject :: Value -> EvalM (Pattern Subject)
 valueToPatternSubject (VPattern pat) = return pat
@@ -164,9 +164,9 @@ valueToPatternSubject (VList []) = do
         , labels = Set.fromList ["List"]
         , properties = Map.empty
         }
-  return $ pattern emptySubject
+  return $ point emptySubject
 valueToPatternSubject (VList (v:vs)) = do
-  -- Non-empty list: convert to pattern-with
+  -- Non-empty list: convert to pattern with elements
   -- Decoration is empty Subject, elements are recursively converted
   let emptySubject = SubjectCore.Subject
         { identity = SubjectCore.Symbol ""
@@ -175,7 +175,7 @@ valueToPatternSubject (VList (v:vs)) = do
         }
   -- Convert each element to Pattern Subject recursively
   elementPatterns <- mapM valueToPatternSubject (v:vs)
-  return $ patternWith emptySubject elementPatterns
+  return $ pattern emptySubject elementPatterns
 valueToPatternSubject (VClosure (Closure paramNames bodyExpr _capturedEnv)) = do
   -- Serialize Closure as Pattern Subject:
   -- - Decoration: Subject with labels ["Closure"] and properties {params: [...]}
@@ -189,7 +189,7 @@ valueToPatternSubject (VClosure (Closure paramNames bodyExpr _capturedEnv)) = do
         }
   -- Convert body Expr to Pattern Subject (Expr is an s-expression, so it can be Pattern Subject)
   bodyPattern <- exprToPatternSubject bodyExpr
-  return $ patternWith decoration [bodyPattern]
+  return $ pattern decoration [bodyPattern]
 valueToPatternSubject val = do
   -- For atoms and other values: use Gram serialization approach
   -- This ensures consistency with serialization format

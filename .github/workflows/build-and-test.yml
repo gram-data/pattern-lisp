@@ -48,7 +48,8 @@ jobs:
           ${{ runner.os }}-dist-${{ matrix.ghc-version }}-
     
     - name: Configure Cabal
-      run: cabal update
+      run: |
+        cabal update
     
     - name: Build project
       run: cabal build --ghc-options="-Wall" all

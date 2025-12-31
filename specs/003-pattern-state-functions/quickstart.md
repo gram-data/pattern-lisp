@@ -35,11 +35,11 @@ cabal build all
 
 ```scheme
 ;; Create an atomic pattern
-(define atomic (pattern "hello"))
+(define atomic (pure "hello"))
 
 ;; Create a pattern with elements
-(define with-elements (pattern-with "root" 
-  (list (pattern "child1") (pattern "child2"))))
+(define with-elements (pattern "root" 
+  (list (pure "child1") (pure "child2"))))
 ```
 
 ### 2. Querying Pattern Values
@@ -64,10 +64,10 @@ All tools must follow the canonical form `(lambda (state) ...)`:
 ```scheme
 ;; Simple tool that adds a greeting
 (lambda (state)
-  (pattern-with 
+  (pattern 
     (pattern-value state)  ; Preserve decoration
     (cons 
-      (pattern "Hello from Pattern Lisp!")
+      (pure "Hello from Pattern Lisp!")
       (pattern-elements state))))
 ```
 
@@ -173,13 +173,13 @@ Deserializes runtime from a Gram file and resumes execution.
 (lambda (state)
   (let ((count (pattern-size state))
         (depth (pattern-depth state)))
-    (pattern-with
+    (pattern
       (pattern-value state)
-      (cons 
-        (pattern-with "summary" 
-          (list 
-            (pattern count)
-            (pattern depth)))
+      (cons
+        (pattern "summary" 
+          (list
+            (pure count)
+            (pure depth)))
         (pattern-elements state)))))
 
 ;; 2. Save to file: state-reader.plisp
@@ -269,13 +269,13 @@ it "round-trips closures" $ do
 ;; Define multiple tools
 (define add-timestamp
   (lambda (state)
-    (pattern-with (pattern-value state)
-      (cons (pattern "timestamp") (pattern-elements state)))))
+    (pattern (pattern-value state)
+      (cons (pure "timestamp") (pattern-elements state)))))
 
 (define add-metadata
   (lambda (state)
-    (pattern-with (pattern-value state)
-      (cons (pattern "metadata") (pattern-elements state)))))
+    (pattern (pattern-value state)
+      (cons (pure "metadata") (pattern-elements state)))))
 
 ;; Compose tools
 (lambda (state)
@@ -289,9 +289,9 @@ it "round-trips closures" $ do
 (lambda (state)
   (let ((incrementer (lambda (x) (+ x 1)))
         (doubler (lambda (x) (* x 2))))
-    (pattern-with "functions"
-      (list (pattern incrementer)
-            (pattern doubler)))))
+    (pattern "functions"
+      (list (pure incrementer)
+            (pure doubler)))))
 ```
 
 ### State Filtering
@@ -302,7 +302,7 @@ it "round-trips closures" $ do
   (let ((filtered (pattern-find state 
                     (lambda (p) 
                       (> (pattern-size p) 1)))))
-    (pattern-with "filtered" (list filtered))))
+    (pattern "filtered" (list filtered))))
 ```
 
 ## Troubleshooting

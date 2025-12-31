@@ -24,7 +24,7 @@ module PatternLisp.Gram
 import PatternLisp.Syntax
 import PatternLisp.Codec
 import Pattern (Pattern)
-import Pattern.Core (pattern)
+import Pattern.Core (point)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import Gram.Serialize (toGram)
@@ -61,7 +61,7 @@ gramToPattern = fromGram
 exprToGram :: Expr -> String
 exprToGram expr =
   let subject = exprToSubject expr
-      pat = pattern subject
+      pat = point subject
   in patternToGram pat
 
 -- | Deserialize gram notation string to an expression AST.

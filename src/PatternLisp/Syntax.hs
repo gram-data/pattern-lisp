@@ -143,8 +143,8 @@ data Primitive
   | Gt | Lt | Eq | Ne               -- ^ Comparison
   | StringAppend | StringLength | Substring  -- ^ String operations
   -- Pattern construction
-  | PatternCreate      -- ^ (pattern value)
-  | PatternWith        -- ^ (pattern-with value elements)
+  | Pure               -- ^ (pure value) - creates atomic pattern
+  | PatternCreate      -- ^ (pattern value elements) - creates pattern with elements
   -- Pattern queries
   | PatternValue       -- ^ (pattern-value p)
   | PatternElements   -- ^ (pattern-elements p)
@@ -203,8 +203,8 @@ primitiveName Ne = "/="
 primitiveName StringAppend = "string-append"
 primitiveName StringLength = "string-length"
 primitiveName Substring = "substring"
+primitiveName Pure = "pure"
 primitiveName PatternCreate = "pattern"
-primitiveName PatternWith = "pattern-with"
 primitiveName PatternValue = "pattern-value"
 primitiveName PatternElements = "pattern-elements"
 primitiveName PatternLength = "pattern-length"
@@ -245,8 +245,8 @@ primitiveFromName "/=" = Just Ne
 primitiveFromName "string-append" = Just StringAppend
 primitiveFromName "string-length" = Just StringLength
 primitiveFromName "substring" = Just Substring
+primitiveFromName "pure" = Just Pure
 primitiveFromName "pattern" = Just PatternCreate
-primitiveFromName "pattern-with" = Just PatternWith
 primitiveFromName "pattern-value" = Just PatternValue
 primitiveFromName "pattern-elements" = Just PatternElements
 primitiveFromName "pattern-length" = Just PatternLength
