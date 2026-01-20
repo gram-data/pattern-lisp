@@ -7,7 +7,7 @@ import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue, exprToSubject, subjectToExpr)
 import PatternLisp.Gram (patternToGram, gramToPattern)
-import PatternLisp.Syntax (Error(..), MapKey(..), KeywordKey(..))
+import PatternLisp.Syntax (Error(..))
 import Pattern (Pattern)
 import Pattern.Core (point, pattern)
 import qualified Pattern.Core as PatternCore
@@ -47,30 +47,30 @@ spec :: Spec
 spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
   describe "Basic value round-trips" $ do
     it "round-trip numbers" $ do
-      let val = VNumber 42
+      let val = VInteger 42
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: values not equal"
     
     it "round-trip strings" $ do
-      let val = VString (T.pack "hello")
+      let val = VString ( "hello")
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: values not equal"
     
     it "round-trip booleans" $ do
-      let val = VBool True
+      let val = VBoolean True
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: values not equal"
       
-      let val2 = VBool False
+      let val2 = VBoolean False
       result2 <- runRoundTripValue val2
       if result2 then return () else fail "Round-trip failed: values not equal"
     
     it "round-trip lists" $ do
-      let val = VList [VNumber 1, VNumber 2, VNumber 3]
+      let val = VArray [VInteger 1, VInteger 2, VInteger 3]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: values not equal"
       
-      let val2 = VList [VString (T.pack "a"), VString (T.pack "b")]
+      let val2 = VArray [VString ( "a"), VString ( "b")]
       result2 <- runRoundTripValue val2
       if result2 then return () else fail "Round-trip failed: values not equal"
     
@@ -129,12 +129,12 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
             case val' of
               VClosure closure' -> do
                 -- Execute the deserialized closure
-                let arg = VNumber 5
+                let arg = VInteger 5
                 let argBindings = Map.fromList (zip (params closure') [arg])
                 let extendedEnv = Map.union argBindings (env closure')
                 case evalExpr (body closure') extendedEnv of
                   Left err'' -> fail $ "Execution failed: " ++ show err''
-                  Right result -> result `shouldBe` VNumber 6
+                  Right result -> result `shouldBe` VInteger 6
               _ -> fail $ "Expected VClosure, got: " ++ show val'
   
   describe "Primitive round-trips" $ do
@@ -155,7 +155,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
         Left err' -> fail $ "Parse error: " ++ show err'
         Right expr -> case evalExpr expr initialEnv of
           Left err' -> fail $ "Eval error: " ++ show err'
-          Right result -> result `shouldBe` VNumber 3
+          Right result -> result `shouldBe` VInteger 3
     
     it "missing primitive in registry errors correctly" $ do
       -- Create a pattern with an invalid primitive name
@@ -190,19 +190,19 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
       if result then return () else fail "Round-trip failed: keyword values not equal"
     
     it "round-trip maps" $ do
-      let val = VMap $ Map.fromList [(KeyKeyword (KeywordKey "name"), VString (T.pack "Alice")), (KeyKeyword (KeywordKey "age"), VNumber 30)]
+      let val = VMap $ Map.fromList [("name", VString "Alice"), ("age", VInteger 30)]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: map values not equal"
     
     it "round-trip sets" $ do
-      let val = VSet $ Set.fromList [VNumber 1, VNumber 2, VNumber 3]
+      let val = VSet $ Set.fromList [VInteger 1, VInteger 2, VInteger 3]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: set values not equal"
     
     it "round-trip nested maps and sets" $ do
       let val = VMap $ Map.fromList 
-            [ (KeyKeyword (KeywordKey "labels"), VSet $ Set.fromList [VString (T.pack "Person"), VString (T.pack "Employee")])
-            , (KeyKeyword (KeywordKey "data"), VMap $ Map.fromList [(KeyKeyword (KeywordKey "count"), VNumber 42)])
+            [ ("labels", VSet $ Set.fromList [VString "Person", VString "Employee"])
+            , ("data", VMap $ Map.fromList [("count", VInteger 42)])
             ]
       result <- runRoundTripValue val
       if result then return () else fail "Round-trip failed: nested map/set values not equal"
@@ -223,7 +223,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
     
     it "round-trip preserves map structure with keyword keys" $ do
       -- Test that maps preserve keyword keys after round-trip
-      let val = VMap $ Map.fromList [(KeyKeyword (KeywordKey "key1"), VNumber 1), (KeyKeyword (KeywordKey "key2"), VString (T.pack "value"))]
+      let val = VMap $ Map.fromList [("key1", VInteger 1), ("key2", VString "value")]
           pat = valueToPatternSubjectForGram val
           gramText = patternToGram pat
       val' <- case gramToPattern gramText of
@@ -233,13 +233,13 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
           Right v -> return v
       case val' of
         VMap m -> do
-          Map.lookup (KeyKeyword (KeywordKey "key1")) m `shouldBe` Just (VNumber 1)
-          Map.lookup (KeyKeyword (KeywordKey "key2")) m `shouldBe` Just (VString (T.pack "value"))
+          Map.lookup "key1" m `shouldBe` Just (VInteger 1)
+          Map.lookup "key2" m `shouldBe` Just (VString "value")
         _ -> fail $ "Expected VMap, got: " ++ show val'
     
     it "round-trip preserves set uniqueness" $ do
       -- Test that sets remove duplicates after round-trip
-      let val = VSet $ Set.fromList [VNumber 1, VNumber 2, VNumber 1]  -- Duplicate 1
+      let val = VSet $ Set.fromList [VInteger 1, VInteger 2, VInteger 1]  -- Duplicate 1
           pat = valueToPatternSubjectForGram val
           gramText = patternToGram pat
       val' <- case gramToPattern gramText of
@@ -250,8 +250,8 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
       case val' of
         VSet s -> do
           Set.size s `shouldBe` 2  -- Duplicate removed
-          Set.member (VNumber 1) s `shouldBe` True
-          Set.member (VNumber 2) s `shouldBe` True
+          Set.member (VInteger 1) s `shouldBe` True
+          Set.member (VInteger 2) s `shouldBe` True
         _ -> fail $ "Expected VSet, got: " ++ show val'
   
   describe "Expression serialization" $ do
@@ -260,7 +260,7 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
       let exprs = 
             [ Atom (Symbol "x")
             , Atom (Number 42)
-            , Atom (String (T.pack "hello"))
+            , Atom (String ( "hello"))
             , Atom (Bool True)
             , List [Atom (Symbol "+"), Atom (Number 1), Atom (Number 2)]
             , Quote (Atom (Symbol "x"))

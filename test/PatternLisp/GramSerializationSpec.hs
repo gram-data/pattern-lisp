@@ -99,19 +99,19 @@ spec :: Spec
 spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "Round-trip: Basic value types" $ do
     it "round-trip numbers" $ do
-      let val = VNumber 42
+      let val = VInteger 42
       runRoundTripValue val initialEnv
     
     it "round-trip strings" $ do
-      let val = VString (T.pack "hello")
+      let val = VString ( "hello")
       runRoundTripValue val initialEnv
     
     it "round-trip booleans" $ do
-      let val = VBool True
+      let val = VBoolean True
       runRoundTripValue val initialEnv
     
     it "round-trip lists" $ do
-      let val = VList [VNumber 1, VNumber 2, VNumber 3]
+      let val = VArray [VInteger 1, VInteger 2, VInteger 3]
       runRoundTripValue val initialEnv
     
     it "round-trip patterns" $ do
@@ -190,7 +190,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
             -- Execute original closure
             case val of
               VClosure origClosure -> do
-                let args = [VNumber 5]
+                let args = [VInteger 5]
                 result1 <- case applyClosureHelper origClosure args initialEnv of
                   Left err6 -> fail $ "Original closure execution error: " ++ show err6
                   Right r -> return r
@@ -345,7 +345,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
   describe "File-level serialization" $ do
     it "program with file-level metadata round-trips" $ do
       -- Test that programToGram and gramToProgram work for file-level serialization
-      let values = [VNumber 42, VString (T.pack "hello"), VBool True]
+      let values = [VInteger 42, VString ( "hello"), VBoolean True]
       let env = initialEnv
       -- Serialize to Gram
       let gramText = programToGram values env
@@ -365,7 +365,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err2 -> fail $ "Eval error: " ++ show err2
           Right (VClosure closure) -> do
-            let values = [VNumber 42, VClosure closure, VString (T.pack "test")]
+            let values = [VInteger 42, VClosure closure, VString ( "test")]
             let env = initialEnv
             -- Serialize to Gram
             let gramText = programToGram values env
@@ -437,7 +437,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
               let originalEnv = env originalClosure
               -- Verify original has 'x'
               Map.member "x" originalEnv `shouldBe` True
-              Map.lookup "x" originalEnv `shouldBe` Just (VNumber 10)
+              Map.lookup "x" originalEnv `shouldBe` Just (VInteger 10)
               
               -- Get deserialized value to inspect
               let pat = valueToPatternSubjectForGram (VClosure originalClosure)
@@ -450,7 +450,7 @@ spec = describe "PatternLisp.GramSerializationSpec - Gram Serialization" $ do
                     let deserializedEnv = env deserializedClosure
                     -- This will fail and show us the difference
                     Map.member "x" deserializedEnv `shouldBe` True
-                    Map.lookup "x" deserializedEnv `shouldBe` Just (VNumber 10)
+                    Map.lookup "x" deserializedEnv `shouldBe` Just (VInteger 10)
                   Right val -> fail $ "Expected VClosure, got: " ++ show val
             Right val -> fail $ "Expected VClosure, got: " ++ show val
 

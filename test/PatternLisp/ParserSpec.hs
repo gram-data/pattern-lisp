@@ -43,8 +43,8 @@ spec = describe "PatternLisp.Parser" $ do
       parseExpr "0" `shouldBe` Right (Atom (Number 0))
     
     it "parses strings with quotes and escapes" $ do
-      parseExpr "\"hello\"" `shouldBe` Right (Atom (String (T.pack "hello")))
-      parseExpr "\"hello \\\"world\\\"\"" `shouldBe` Right (Atom (String (T.pack "hello \"world\"")))
+      parseExpr "\"hello\"" `shouldBe` Right (Atom (String ( "hello")))
+      parseExpr "\"hello \\\"world\\\"\"" `shouldBe` Right (Atom (String ( "hello \"world\"")))
     
     it "parses symbols (valid identifiers)" $ do
       parseExpr "x" `shouldBe` Right (Atom (Symbol "x"))
@@ -63,22 +63,22 @@ spec = describe "PatternLisp.Parser" $ do
     it "parses set literals with hash set syntax" $ do
       parseExpr "#{1 2 3}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)])
       parseExpr "#{}" `shouldBe` Right (SetLiteral [])
-      parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String (T.pack "hello")), Atom (Bool True)])
+      parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String ( "hello")), Atom (Bool True)])
     
-    it "parses map literals with curly brace syntax" $ do
-      parseExpr "{name: \"Alice\" age: 30}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "age"), Atom (Number 30)])
-      parseExpr "{}" `shouldBe` Right (MapLiteral [])
+    it "parses record literals with curly brace syntax (comma-separated)" $ do
+      parseExpr "{name: \"Alice\", age: 30}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30))])
+      parseExpr "{}" `shouldBe` Right (RecordLiteral [])
     
-    it "parses nested maps" $ do
-      parseExpr "{user: {name: \"Bob\"}}" `shouldBe` Right (MapLiteral [Atom (Keyword "user"), MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Bob"))]])
+    it "parses nested records" $ do
+      parseExpr "{user: {name: \"Bob\"}}" `shouldBe` Right (RecordLiteral [("user", RecordLiteral [("name", Atom (String "Bob"))])])
     
-    it "handles duplicate keys in map literals (last value wins)" $ do
+    it "handles duplicate keys in record literals (last value wins)" $ do
       -- Parser allows duplicate keys; evaluator handles them (last wins)
-      parseExpr "{name: \"Alice\" name: \"Bob\"}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (Keyword "name"), Atom (String (T.pack "Bob"))])
+      parseExpr "{name: \"Alice\", name: \"Bob\"}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("name", Atom (String "Bob"))])
     
-    it "parses map literals with string keys" $ do
-      parseExpr "{\"name\" \"Alice\" \"age\" 30}" `shouldBe` Right (MapLiteral [Atom (String (T.pack "name")), Atom (String (T.pack "Alice")), Atom (String (T.pack "age")), Atom (Number 30)])
+    it "parses record literals with string keys" $ do
+      parseExpr "{\"name\": \"Alice\", \"age\": 30}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30))])
     
-    it "parses map literals with mixed keyword and string keys" $ do
-      parseExpr "{name: \"Alice\" \"user-id\" 123}" `shouldBe` Right (MapLiteral [Atom (Keyword "name"), Atom (String (T.pack "Alice")), Atom (String (T.pack "user-id")), Atom (Number 123)])
+    it "parses record literals with mixed identifier and string keys" $ do
+      parseExpr "{name: \"Alice\", \"user-id\": 123}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("user-id", Atom (Number 123))])
 
