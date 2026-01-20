@@ -220,6 +220,32 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
                 Map.size m `shouldBe` 1
                 Map.lookup "name" m `shouldBe` Just (VString "Bob")  -- Last value wins
               _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates records with different value types" $ do
+      case parseExpr "{name: \"Alice\", age: 30, active: #t, count: 0}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+                Map.lookup "active" m `shouldBe` Just (VBoolean True)
+                Map.lookup "count" m `shouldBe` Just (VInteger 0)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "record equality is structural and order-independent" $ do
+      case (parseExpr "{a: 1, b: 2}", parseExpr "{b: 2, a: 1}") of
+        (Right expr1, Right expr2) -> do
+          val1 <- case evalExpr expr1 initialEnv of
+            Left err -> fail $ "Eval error 1: " ++ show err
+            Right v -> return v
+          val2 <- case evalExpr expr2 initialEnv of
+            Left err -> fail $ "Eval error 2: " ++ show err
+            Right v -> return v
+          val1 `shouldBe` val2  -- Should be equal despite different key order
+        _ -> fail "Parse error in record equality test"
   
   describe "Subject Labels as String Sets" $ do
     it "creates Subject label set #{\"Person\" \"Employee\"}" $ do

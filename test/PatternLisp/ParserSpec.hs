@@ -81,4 +81,18 @@ spec = describe "PatternLisp.Parser" $ do
     
     it "parses record literals with mixed identifier and string keys" $ do
       parseExpr "{name: \"Alice\", \"user-id\": 123}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("user-id", Atom (Number 123))])
+    
+    it "parses records with different value types (string, number, boolean)" $ do
+      parseExpr "{name: \"Alice\", age: 30, active: #t}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30)), ("active", Atom (Bool True))])
+      parseExpr "{count: 0, empty: #f, label: \"test\"}" `shouldBe` Right (RecordLiteral [("count", Atom (Number 0)), ("empty", Atom (Bool False)), ("label", Atom (String "test"))])
+    
+    it "reports error for unclosed record" $ do
+      case parseExpr "{name: \"Alice\"" of
+        Left (ParseError _) -> True `shouldBe` True
+        _ -> fail "Expected ParseError for unclosed record"
+    
+    it "reports error for invalid key syntax" $ do
+      case parseExpr "{123: \"value\"}" of
+        Left (ParseError _) -> True `shouldBe` True
+        _ -> fail "Expected ParseError for invalid key (number)"
 
