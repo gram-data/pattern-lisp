@@ -39,7 +39,7 @@
 -- > pat <- exprToPatternSubject expr  -- Returns Pattern Subject
 -- >
 -- > -- Secondary path: Value to Subject (for property storage)
--- > let val = VNumber 42
+-- > let val = VInteger 42
 -- > let subj = valueToSubject val
 -- > case subjectToValue subj of
 -- >   Right val' -> val' == val  -- True
@@ -68,7 +68,6 @@ import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject(..))
 import qualified Subject.Core as SubjectCore
 import qualified Subject.Value as SubjectValue
-import qualified Data.Text as T
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.List (nubBy)
@@ -105,31 +104,31 @@ subjectValueToSubject :: SubjectValue.Value -> Either Error Subject
 subjectValueToSubject (SubjectValue.VMap m) = do
   identVal <- case Map.lookup "identity" m of
     Just v -> Right v
-    Nothing -> Left $ TypeMismatch "Subject map missing identity" (VList [])
+    Nothing -> Left $ TypeMismatch "Subject map missing identity" (VArray [])
   ident <- case identVal of
     SubjectValue.VSymbol s -> Right (SubjectCore.Symbol s)
-    _ -> Left $ TypeMismatch "Subject identity must be VSymbol" (VList [])
+    _ -> Left $ TypeMismatch "Subject identity must be VSymbol" (VArray [])
   
   labelsVal <- case Map.lookup "labels" m of
     Just (SubjectValue.VArray vs) -> Right vs
-    _ -> Left $ TypeMismatch "Subject map missing labels array" (VList [])
+    _ -> Left $ TypeMismatch "Subject map missing labels array" (VArray [])
   labelStrs <- mapM extractStringFromValue labelsVal
   let lbls = Set.fromList labelStrs
   
   propsVal <- case Map.lookup "properties" m of
     Just (SubjectValue.VMap p) -> Right p
-    _ -> Left $ TypeMismatch "Subject map missing properties map" (VList [])
+    _ -> Left $ TypeMismatch "Subject map missing properties map" (VArray [])
   
   Right $ Subject
     { identity = ident
     , labels = lbls
     , properties = propsVal
     }
-subjectValueToSubject _ = Left $ TypeMismatch "Subject value must be VMap" (VList [])
+subjectValueToSubject _ = Left $ TypeMismatch "Subject value must be VMap" (VArray [])
 
 extractStringFromValue :: SubjectValue.Value -> Either Error String
 extractStringFromValue (SubjectValue.VString s) = Right s
-extractStringFromValue _ = Left $ TypeMismatch "Expected VString in labels array" (VList [])
+extractStringFromValue _ = Left $ TypeMismatch "Expected VString in labels array" (VArray [])
 
 -- ============================================================================
 -- Primary Path: Expression <-> Pattern Subject
@@ -158,7 +157,7 @@ patternSubjectToExprWithBindings bindingMap pat = do
       -- Identifier reference: look up in binding map to get variable name
       case Map.lookup (identity subj) bindingMap of
         Just varName -> Right $ Atom (Symbol varName)
-        Nothing -> Left $ TypeMismatch ("Unknown identifier reference: " ++ show (identity subj)) (VList [])
+        Nothing -> Left $ TypeMismatch ("Unknown identifier reference: " ++ show (identity subj)) (VArray [])
     else if "If" `Set.member` lbls then do
       -- If special form: [:If | cond, then, else] -> (if cond then else)
       case elements of
@@ -167,7 +166,7 @@ patternSubjectToExprWithBindings bindingMap pat = do
           thenExpr' <- patternSubjectToExprWithBindings bindingMap thenExpr
           elseExpr' <- patternSubjectToExprWithBindings bindingMap elseExpr
           Right $ List [Atom (Symbol "if"), condExpr, thenExpr', elseExpr']
-        _ -> Left $ TypeMismatch "If pattern must have 3 elements" (VList [])
+        _ -> Left $ TypeMismatch "If pattern must have 3 elements" (VArray [])
     else if "Let" `Set.member` lbls then do
       -- Let special form: [:Let | bindings, body] -> (let bindings body)
       case elements of
@@ -175,7 +174,7 @@ patternSubjectToExprWithBindings bindingMap pat = do
           bindings <- patternSubjectToExprWithBindings bindingMap bindingsExpr
           bodyExpr' <- patternSubjectToExprWithBindings bindingMap bodyExpr
           Right $ List [Atom (Symbol "let"), bindings, bodyExpr']
-        _ -> Left $ TypeMismatch "Let pattern must have 2 elements" (VList [])
+        _ -> Left $ TypeMismatch "Let pattern must have 2 elements" (VArray [])
     else if "Begin" `Set.member` lbls then do
       -- Begin special form: [:Begin | expr1, expr2, ...] -> (begin expr1 expr2 ...)
       exprs <- mapM (patternSubjectToExprWithBindings bindingMap) elements
@@ -187,14 +186,14 @@ patternSubjectToExprWithBindings bindingMap pat = do
           name <- patternSubjectToExprWithBindings bindingMap nameExpr
           value <- patternSubjectToExprWithBindings bindingMap valueExpr
           Right $ List [Atom (Symbol "define"), name, value]
-        _ -> Left $ TypeMismatch "Define pattern must have 2 elements" (VList [])
+        _ -> Left $ TypeMismatch "Define pattern must have 2 elements" (VArray [])
     else if "Quote" `Set.member` lbls then do
       -- Quote special form: [:Quote | expr] -> (quote expr) or 'expr
       case elements of
         [exprPat] -> do
           expr <- patternSubjectToExprWithBindings bindingMap exprPat
           Right $ Quote expr
-        _ -> Left $ TypeMismatch "Quote pattern must have 1 element" (VList [])
+        _ -> Left $ TypeMismatch "Quote pattern must have 1 element" (VArray [])
     else if "List" `Set.member` lbls then do
       -- List pattern: extract elements and convert recursively
       exprs <- mapM (patternSubjectToExprWithBindings bindingMap) elements
@@ -203,7 +202,7 @@ patternSubjectToExprWithBindings bindingMap pat = do
       -- Symbol pattern: extract name property (used for parameters)
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) -> Right $ Atom (Symbol name)
-        _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VArray [])
     else do
       -- Atomic pattern: convert decoration Subject to Expr
       -- Try subjectToExpr for other patterns (Var, Number, String, Bool, etc.)
@@ -231,7 +230,7 @@ exprToSubject (Atom (Number n)) = Subject
 exprToSubject (Atom (String s)) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
-  , properties = Map.fromList [("text", SubjectValue.VString (T.unpack s))]
+  , properties = Map.fromList [("text", SubjectValue.VString s)]
   }
 exprToSubject (Atom (Bool b)) = Subject
   { identity = SubjectCore.Symbol ""
@@ -248,10 +247,10 @@ exprToSubject (SetLiteral exprs) = Subject
   , labels = Set.fromList ["Set"]
   , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . exprToSubject) exprs))]
   }
-exprToSubject (MapLiteral pairs) = Subject
+exprToSubject (RecordLiteral pairs) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Map"]
-  , properties = Map.fromList [("pairs", SubjectValue.VArray (map (subjectToSubjectValue . exprToSubject) pairs))]
+  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.fromList (map (\(k, v) -> (k, subjectToSubjectValue (exprToSubject v))) pairs)))]
   }
 exprToSubject (List exprs) = Subject
   { identity = SubjectCore.Symbol ""
@@ -263,6 +262,8 @@ exprToSubject (Quote expr) = Subject
   , labels = Set.fromList ["Quote"]
   , properties = Map.fromList [("expr", subjectToSubjectValue (exprToSubject expr))]
   }
+exprToSubject (Unquote _) = error "Unquote should not appear in exprToSubject (handled during evaluation)"
+exprToSubject (UnquoteSplice _) = error "UnquoteSplice should not appear in exprToSubject (handled during evaluation)"
 
 -- | Converts a Subject representation back to expression AST.
 -- Note: For Pattern Subject conversion, use patternSubjectToExpr instead.
@@ -271,33 +272,33 @@ subjectToExpr subj
   | "Var" `Set.member` labels subj =
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) -> Right $ Atom (Symbol name)
-        _ -> Left $ TypeMismatch "Var Subject missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Var Subject missing name property" (VArray [])
   | "Number" `Set.member` labels subj =
       case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VInteger n) -> Right $ Atom (Number n)
-        _ -> Left $ TypeMismatch "Number Subject missing value property" (VList [])
+        _ -> Left $ TypeMismatch "Number Subject missing value property" (VArray [])
   | "String" `Set.member` labels subj =
       case Map.lookup "text" (properties subj) of
-        Just (SubjectValue.VString s) -> Right $ Atom (String (T.pack s))
-        _ -> Left $ TypeMismatch "String Subject missing text property" (VList [])
+        Just (SubjectValue.VString s) -> Right $ Atom (String s)
+        _ -> Left $ TypeMismatch "String Subject missing text property" (VArray [])
   | "Bool" `Set.member` labels subj =
       case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VBoolean b) -> Right $ Atom (Bool b)
-        _ -> Left $ TypeMismatch "Bool Subject missing value property" (VList [])
+        _ -> Left $ TypeMismatch "Bool Subject missing value property" (VArray [])
   | "List" `Set.member` labels subj = do
       elementsVal <- case Map.lookup "elements" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "List Subject missing elements property" (VList [])
+        _ -> Left $ TypeMismatch "List Subject missing elements property" (VArray [])
       elementSubjects <- mapM subjectValueToSubject elementsVal
       exprs <- mapM subjectToExpr elementSubjects
       Right $ List exprs
   | "Quote" `Set.member` labels subj = do
       exprVal <- case Map.lookup "expr" (properties subj) of
         Just v -> subjectValueToSubject v
-        Nothing -> Left $ TypeMismatch "Quote Subject missing expr property" (VList [])
+        Nothing -> Left $ TypeMismatch "Quote Subject missing expr property" (VArray [])
       expr <- subjectToExpr exprVal
       Right $ Quote expr
-  | otherwise = Left $ TypeMismatch ("Unknown expression Subject label: " ++ show (Set.toList (labels subj))) (VList [])
+  | otherwise = Left $ TypeMismatch ("Unknown expression Subject label: " ++ show (Set.toList (labels subj))) (VArray [])
 
 -- ============================================================================
 -- Secondary Path: Value <-> Subject (for property storage)
@@ -310,7 +311,7 @@ subjectToExpr subj
 -- Note: This is a helper for property storage. For gram serialization, use
 -- PatternLisp.PatternPrimitives.valueToPatternSubject instead.
 valueToSubject :: Value -> Subject
-valueToSubject (VNumber n) = Subject
+valueToSubject (VInteger n) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Number"]
   , properties = Map.fromList [("value", SubjectValue.VInteger n)]
@@ -318,9 +319,9 @@ valueToSubject (VNumber n) = Subject
 valueToSubject (VString s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
-  , properties = Map.fromList [("text", SubjectValue.VString (T.unpack s))]
+  , properties = Map.fromList [("text", SubjectValue.VString s)]
   }
-valueToSubject (VBool b) = Subject
+valueToSubject (VBoolean b) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
@@ -333,18 +334,14 @@ valueToSubject (VKeyword name) = Subject
 valueToSubject (VMap m) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Map"]
-  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.mapKeys mapKeyToString (Map.map (subjectToSubjectValue . valueToSubject) m)))]
+  , properties = Map.fromList [("entries", SubjectValue.VMap (Map.map (subjectToSubjectValue . valueToSubject) m))]
   }
-  where
-    mapKeyToString :: MapKey -> String
-    mapKeyToString (KeyKeyword (KeywordKey k)) = k
-    mapKeyToString (KeyString s) = s
 valueToSubject (VSet s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]
   , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . valueToSubject) (Set.toList s)))]
   }
-valueToSubject (VList vs) = Subject
+valueToSubject (VArray vs) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["List"]
   , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . valueToSubject) vs))]
@@ -366,6 +363,37 @@ valueToSubject (VClosure closure) =
         [ ("params", SubjectValue.VArray (map SubjectValue.VString (params closure)))
         ]
     }
+valueToSubject (VDecimal d) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Number"]
+  , properties = Map.fromList [("value", SubjectValue.VDecimal d)]
+  }
+valueToSubject (VSymbol s) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Var"]
+  , properties = Map.fromList [("name", SubjectValue.VString s)]
+  }
+valueToSubject (VTaggedString tag content) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["TaggedString"]
+  , properties = Map.fromList 
+      [ ("tag", SubjectValue.VString tag)
+      , ("content", SubjectValue.VString content)
+      ]
+  }
+valueToSubject (VRange r) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Range"]
+  , properties = Map.fromList [("value", SubjectValue.VRange r)]
+  }
+valueToSubject (VMeasurement unit val) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Measurement"]
+  , properties = Map.fromList 
+      [ ("unit", SubjectValue.VString unit)
+      , ("value", SubjectValue.VDecimal val)
+      ]
+  }
 valueToSubject (VPrimitive prim) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Primitive"]
@@ -406,68 +434,62 @@ subjectToValue :: Subject -> Either Error Value
 subjectToValue subj
   | "Number" `Set.member` labels subj =
       case Map.lookup "value" (properties subj) of
-        Just (SubjectValue.VInteger n) -> Right $ VNumber n
-        _ -> Left $ TypeMismatch "Number Subject missing value property" (VList [])
+        Just (SubjectValue.VInteger n) -> Right $ VInteger n
+        _ -> Left $ TypeMismatch "Number Subject missing value property" (VArray [])
   | "String" `Set.member` labels subj =
       -- Support both "value" (Gram serialization) and "text" (legacy property storage)
       case Map.lookup "value" (properties subj) of
-        Just (SubjectValue.VString s) -> Right $ VString (T.pack s)
+        Just (SubjectValue.VString s) -> Right $ VString s
         Nothing -> case Map.lookup "text" (properties subj) of
-          Just (SubjectValue.VString s) -> Right $ VString (T.pack s)
-          _ -> Left $ TypeMismatch "String Subject missing value or text property" (VList [])
-        _ -> Left $ TypeMismatch "String Subject missing value or text property" (VList [])
+          Just (SubjectValue.VString s) -> Right $ VString s
+          _ -> Left $ TypeMismatch "String Subject missing value or text property" (VArray [])
+        _ -> Left $ TypeMismatch "String Subject missing value or text property" (VArray [])
   | "Bool" `Set.member` labels subj =
       case Map.lookup "value" (properties subj) of
-        Just (SubjectValue.VBoolean b) -> Right $ VBool b
-        _ -> Left $ TypeMismatch "Bool Subject missing value property" (VList [])
+        Just (SubjectValue.VBoolean b) -> Right $ VBoolean b
+        _ -> Left $ TypeMismatch "Bool Subject missing value property" (VArray [])
   | "Keyword" `Set.member` labels subj =
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) -> Right $ VKeyword name
-        _ -> Left $ TypeMismatch "Keyword Subject missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Keyword Subject missing name property" (VArray [])
   | "Map" `Set.member` labels subj = do
       entriesVal <- case Map.lookup "entries" (properties subj) of
         Just (SubjectValue.VMap m) -> Right m
-        _ -> Left $ TypeMismatch "Map Subject missing entries property" (VList [])
-      -- Convert Map String Value to Map MapKey Value
-      -- Prefer keywords for simple identifiers, use strings otherwise
+        _ -> Left $ TypeMismatch "Map Subject missing entries property" (VArray [])
+      -- Convert Map String Value to Map String Value (keys are already strings)
       let convertEntry (k, v) = do
             subjVal <- subjectValueToSubject v
             val <- subjectToValue subjVal
-            -- Prefer keyword if it's a valid identifier (simple heuristic)
-            let mapKey = if isValidIdentifier k then KeyKeyword (KeywordKey k) else KeyString k
-            Right (mapKey, val)
-          isValidIdentifier s = case s of
-            [] -> False
-            (c:_) -> all (\ch -> ch `elem` (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-_")) s && not (c `elem` ['0'..'9'])
+            Right (k, val)
       entries <- mapM convertEntry (Map.toList entriesVal)
       Right $ VMap (Map.fromList entries)
   | "Set" `Set.member` labels subj = do
       elementsVal <- case Map.lookup "elements" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "Set Subject missing elements property" (VList [])
+        _ -> Left $ TypeMismatch "Set Subject missing elements property" (VArray [])
       elementSubjects <- mapM subjectValueToSubject elementsVal
       vals <- mapM subjectToValue elementSubjects
       Right $ VSet (Set.fromList vals)  -- Remove duplicates
   | "List" `Set.member` labels subj = do
       elementsVal <- case Map.lookup "elements" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "List Subject missing elements property" (VList [])
+        _ -> Left $ TypeMismatch "List Subject missing elements property" (VArray [])
       elementSubjects <- mapM subjectValueToSubject elementsVal
       vals <- mapM subjectToValue elementSubjects
-      Right $ VList vals
+      Right $ VArray vals
   | "Pattern" `Set.member` labels subj = do
       -- NOTE: Pattern reconstruction from Subject properties is not supported.
       -- The patternToSubject function was incorrect and has been removed.
       -- For Pattern serialization, use patternSubjectToValue instead.
-      Left $ TypeMismatch "Pattern Subject reconstruction from properties is not supported. Use patternSubjectToValue for Pattern deserialization." (VList [])
+      Left $ TypeMismatch "Pattern Subject reconstruction from properties is not supported. Use patternSubjectToValue for Pattern deserialization." (VArray [])
   | "Primitive" `Set.member` labels subj =
       case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString name) ->
           case primitiveFromName name of
             Just prim -> Right $ VPrimitive prim
-            Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VList [])
-        _ -> Left $ TypeMismatch "Primitive Subject missing name property" (VList [])
-  | otherwise = Left $ TypeMismatch ("Unknown Subject label: " ++ show (Set.toList (labels subj))) (VList [])
+            Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VArray [])
+        _ -> Left $ TypeMismatch "Primitive Subject missing name property" (VArray [])
+  | otherwise = Left $ TypeMismatch ("Unknown Subject label: " ++ show (Set.toList (labels subj))) (VArray [])
 
 -- NOTE: subjectToPatternFromSubject removed - it was used for the incorrect patternToSubject
 -- conversion. Patterns should be serialized as Pattern Subject, not converted to Subject.
@@ -480,11 +502,11 @@ subjectToEnv subj
   | "Scope" `Set.member` labels subj = do
       bindingsVal <- case Map.lookup "bindings" (properties subj) of
         Just (SubjectValue.VArray vs) -> Right vs
-        _ -> Left $ TypeMismatch "Env Subject missing bindings property" (VList [])
+        _ -> Left $ TypeMismatch "Env Subject missing bindings property" (VArray [])
       bindingSubjects <- mapM subjectValueToSubject bindingsVal
       bindings <- mapM subjectToBinding bindingSubjects
       Right $ Map.fromList bindings
-  | otherwise = Left $ TypeMismatch "Expected Env Subject" (VList [])
+  | otherwise = Left $ TypeMismatch "Expected Env Subject" (VArray [])
 
 -- | Converts a Subject representation back to a binding.
 -- Note: Not currently used for Closure deserialization since env is not serialized.
@@ -494,13 +516,13 @@ subjectToBinding subj
   | "Binding" `Set.member` labels subj = do
       name <- case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString n) -> Right n
-        _ -> Left $ TypeMismatch "Binding Subject missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Binding Subject missing name property" (VArray [])
       valueVal <- case Map.lookup "value" (properties subj) of
         Just v -> subjectValueToSubject v
-        Nothing -> Left $ TypeMismatch "Binding Subject missing value property" (VList [])
+        Nothing -> Left $ TypeMismatch "Binding Subject missing value property" (VArray [])
       val <- subjectToValue valueVal
       Right (name, val)
-  | otherwise = Left $ TypeMismatch "Expected Binding Subject" (VList [])
+  | otherwise = Left $ TypeMismatch "Expected Binding Subject" (VArray [])
 
 -- ============================================================================
 -- Pattern Subject Helpers (for deserialization)
@@ -530,7 +552,7 @@ subjectToBinding subj
 -- This extracts just the Subject decoration (not the full Pattern).
 -- For runtime pattern operations that need to create pattern decorations.
 valueToSubjectForGram :: Value -> Subject
-valueToSubjectForGram (VNumber n) = Subject
+valueToSubjectForGram (VInteger n) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Number"]
   , properties = Map.fromList [("value", SubjectValue.VInteger n)]
@@ -538,9 +560,9 @@ valueToSubjectForGram (VNumber n) = Subject
 valueToSubjectForGram (VString s) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["String"]
-  , properties = Map.fromList [("value", SubjectValue.VString (T.unpack s))]
+  , properties = Map.fromList [("value", SubjectValue.VString s)]
   }
-valueToSubjectForGram (VBool b) = Subject
+valueToSubjectForGram (VBoolean b) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Bool"]
   , properties = Map.fromList [("value", SubjectValue.VBoolean b)]
@@ -560,7 +582,7 @@ valueToSubjectForGram (VSet _) = Subject
   , labels = Set.fromList ["Set"]
   , properties = Map.empty  -- Set elements are stored as pattern elements, not properties
   }
-valueToSubjectForGram (VList _) = Subject
+valueToSubjectForGram (VArray _) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["List"]
   , properties = Map.empty
@@ -570,6 +592,37 @@ valueToSubjectForGram (VPrimitive prim) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Primitive"]
   , properties = Map.fromList [("name", SubjectValue.VString (primitiveName prim))]
+  }
+valueToSubjectForGram (VDecimal d) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Number"]
+  , properties = Map.fromList [("value", SubjectValue.VDecimal d)]
+  }
+valueToSubjectForGram (VSymbol s) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Var"]
+  , properties = Map.fromList [("name", SubjectValue.VString s)]
+  }
+valueToSubjectForGram (VTaggedString tag content) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["TaggedString"]
+  , properties = Map.fromList 
+      [ ("tag", SubjectValue.VString tag)
+      , ("content", SubjectValue.VString content)
+      ]
+  }
+valueToSubjectForGram (VRange r) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Range"]
+  , properties = Map.fromList [("value", SubjectValue.VRange r)]
+  }
+valueToSubjectForGram (VMeasurement unit val) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["Measurement"]
+  , properties = Map.fromList 
+      [ ("unit", SubjectValue.VString unit)
+      , ("value", SubjectValue.VDecimal val)
+      ]
   }
 valueToSubjectForGram (VClosure _) = Subject
   { identity = SubjectCore.Symbol ""
@@ -581,18 +634,15 @@ valueToSubjectForGram (VClosure _) = Subject
 -- This follows the design in docs/plisp-serialization-design.md
 -- This is a pure function for serialization (unlike PatternPrimitives.valueToPatternSubject which is monadic)
 valueToPatternSubjectForGram :: Value -> Pattern Subject
-valueToPatternSubjectForGram (VNumber n) = point $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGram (VInteger n) = point $ valueToSubjectForGram (VInteger n)
 valueToPatternSubjectForGram (VString s) = point $ valueToSubjectForGram (VString s)
-valueToPatternSubjectForGram (VBool b) = point $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGram (VBoolean b) = point $ valueToSubjectForGram (VBoolean b)
 valueToPatternSubjectForGram (VKeyword name) = point $ valueToSubjectForGram (VKeyword name)
 valueToPatternSubjectForGram (VMap m) = 
   -- Serialize map as pattern with elements: alternating key-value pairs
-  -- Keys can be keywords or strings, each serialized appropriately
+  -- Keys are strings, serialize as string patterns
   let keyValuePairs = Map.toList m
-      keyPatterns = map (\(mapKey, _) -> case mapKey of
-        KeyKeyword (KeywordKey k) -> valueToPatternSubjectForGram (VKeyword k)
-        KeyString s -> valueToPatternSubjectForGram (VString (T.pack s))
-        ) keyValuePairs
+      keyPatterns = map (\(k, _) -> valueToPatternSubjectForGram (VString k)) keyValuePairs
       valuePatterns = map (\(_, v) -> valueToPatternSubjectForGram v) keyValuePairs
       -- Interleave keys and values: [key1, value1, key2, value2, ...]
       elements = concat $ zipWith (\k v -> [k, v]) keyPatterns valuePatterns
@@ -601,8 +651,8 @@ valueToPatternSubjectForGram (VSet s) =
   -- Serialize set as pattern with elements: each element as a Pattern Subject
   let elements = map valueToPatternSubjectForGram (Set.toList s)
   in pattern (valueToSubjectForGram (VSet Set.empty)) elements
-valueToPatternSubjectForGram (VList vs) = pattern
-  (valueToSubjectForGram (VList []))
+valueToPatternSubjectForGram (VArray vs) = pattern
+  (valueToSubjectForGram (VArray []))
   (map valueToPatternSubjectForGram vs)
 valueToPatternSubjectForGram (VPattern pat) = 
   -- A VPattern value is semantically a Pattern Subject with label "Pattern"
@@ -610,18 +660,28 @@ valueToPatternSubjectForGram (VPattern pat) =
   -- Example: (pattern 42) → [:Pattern | [:Number {value: 42}]]
   pattern (Subject { identity = SubjectCore.Symbol "", labels = Set.fromList ["Pattern"], properties = Map.empty }) [pat]
 valueToPatternSubjectForGram (VPrimitive prim) = point $ valueToSubjectForGram (VPrimitive prim)
+valueToPatternSubjectForGram (VDecimal d) = point $ valueToSubjectForGram (VDecimal d)
+valueToPatternSubjectForGram (VSymbol s) = point $ valueToSubjectForGram (VSymbol s)
+valueToPatternSubjectForGram (VTaggedString tag content) = point $ valueToSubjectForGram (VTaggedString tag content)
+valueToPatternSubjectForGram (VRange r) = point $ valueToSubjectForGram (VRange r)
+valueToPatternSubjectForGram (VMeasurement unit val) = point $ valueToSubjectForGram (VMeasurement unit val)
 valueToPatternSubjectForGram (VClosure closure) = closureToPatternSubject closure
 
 -- | Internal version that uses State monad for scope ID generation
 -- This allows nested closures to share the same counter for unique IDs
 valueToPatternSubjectForGramWithState :: Value -> ScopeIdState (Pattern Subject)
-valueToPatternSubjectForGramWithState (VNumber n) = return $ point $ valueToSubjectForGram (VNumber n)
+valueToPatternSubjectForGramWithState (VInteger n) = return $ point $ valueToSubjectForGram (VInteger n)
 valueToPatternSubjectForGramWithState (VString s) = return $ point $ valueToSubjectForGram (VString s)
-valueToPatternSubjectForGramWithState (VBool b) = return $ point $ valueToSubjectForGram (VBool b)
+valueToPatternSubjectForGramWithState (VBoolean b) = return $ point $ valueToSubjectForGram (VBoolean b)
 valueToPatternSubjectForGramWithState (VKeyword name) = return $ point $ valueToSubjectForGram (VKeyword name)
 valueToPatternSubjectForGramWithState (VMap m) = return $ valueToPatternSubjectForGram (VMap m)
 valueToPatternSubjectForGramWithState (VSet s) = return $ valueToPatternSubjectForGram (VSet s)
-valueToPatternSubjectForGramWithState (VList vs) = do
+valueToPatternSubjectForGramWithState (VDecimal d) = return $ point $ valueToSubjectForGram (VDecimal d)
+valueToPatternSubjectForGramWithState (VSymbol s) = return $ point $ valueToSubjectForGram (VSymbol s)
+valueToPatternSubjectForGramWithState (VTaggedString tag content) = return $ point $ valueToSubjectForGram (VTaggedString tag content)
+valueToPatternSubjectForGramWithState (VRange r) = return $ point $ valueToSubjectForGram (VRange r)
+valueToPatternSubjectForGramWithState (VMeasurement unit val) = return $ point $ valueToSubjectForGram (VMeasurement unit val)
+valueToPatternSubjectForGramWithState (VArray vs) = do
   elementPatterns <- mapM valueToPatternSubjectForGramWithState vs
   return $ pattern
     (Subject
@@ -655,32 +715,32 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
     ["Number"] -> do
       val <- case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VInteger n) -> Right n
-        _ -> Left $ TypeMismatch "Number pattern missing value property" (VList [])
-      Right $ VNumber val
+        _ -> Left $ TypeMismatch "Number pattern missing value property" (VArray [])
+      Right $ VInteger val
     ["String"] -> do
       -- Support both "value" (Gram serialization) and "text" (legacy property storage)
       val <- case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VString s) -> Right s
         Nothing -> case Map.lookup "text" (properties subj) of
           Just (SubjectValue.VString s) -> Right s
-          _ -> Left $ TypeMismatch "String pattern missing value or text property" (VList [])
-        _ -> Left $ TypeMismatch "String pattern missing value or text property" (VList [])
-      Right $ VString (T.pack val)
+          _ -> Left $ TypeMismatch "String pattern missing value or text property" (VArray [])
+        _ -> Left $ TypeMismatch "String pattern missing value or text property" (VArray [])
+      Right $ VString val
     ["Bool"] -> do
       val <- case Map.lookup "value" (properties subj) of
         Just (SubjectValue.VBoolean b) -> Right b
-        _ -> Left $ TypeMismatch "Bool pattern missing value property" (VList [])
-      Right $ VBool val
+        _ -> Left $ TypeMismatch "Bool pattern missing value property" (VArray [])
+      Right $ VBoolean val
     ["Keyword"] -> do
       name <- case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString n) -> Right n
-        _ -> Left $ TypeMismatch "Keyword pattern missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Keyword pattern missing name property" (VArray [])
       Right $ VKeyword name
     ["Map"] -> do
       -- Map is serialized as pattern with elements: alternating key-value pairs
       let elements = PatternCore.elements pat
       if odd (length elements)
-        then Left $ TypeMismatch "Map pattern must have even number of elements (key-value pairs)" (VList [])
+        then Left $ TypeMismatch "Map pattern must have even number of elements (key-value pairs)" (VArray [])
         else do
           -- Deserialize alternating key-value pairs: [key1, value1, key2, value2, ...]
           let deserializePairs [] = Right []
@@ -688,13 +748,13 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
                 keyVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes keyPat
                 valueVal <- patternSubjectToValueWithScopeMap scopeMap resolvingScopes valuePat
                 restPairs <- deserializePairs rest
-                -- Keys can be keywords or strings
-                let mapKey = case keyVal of
-                      VKeyword k -> KeyKeyword (KeywordKey k)
-                      VString s -> KeyString (T.unpack s)
+                -- Keys can be keywords or strings, convert to string
+                let keyStr = case keyVal of
+                      VKeyword k -> k
+                      VString s -> s
                       _ -> error $ "Map key must be keyword or string, got: " ++ show keyVal
-                Right ((mapKey, valueVal) : restPairs)
-              deserializePairs _ = Left $ TypeMismatch "Map pattern elements must be in key-value pairs" (VList [])
+                Right ((keyStr, valueVal) : restPairs)
+              deserializePairs _ = Left $ TypeMismatch "Map pattern elements must be in key-value pairs" (VArray [])
           entries <- deserializePairs elements
           Right $ VMap (Map.fromList entries)
     ["Set"] -> do
@@ -705,14 +765,14 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
     ["List"] -> do
       let elements = PatternCore.elements pat
       vals <- mapM (patternSubjectToValueWithScopeMap scopeMap resolvingScopes) elements
-      Right $ VList vals
+      Right $ VArray vals
     ["Primitive"] -> do
       name <- case Map.lookup "name" (properties subj) of
         Just (SubjectValue.VString n) -> Right n
-        _ -> Left $ TypeMismatch "Primitive pattern missing name property" (VList [])
+        _ -> Left $ TypeMismatch "Primitive pattern missing name property" (VArray [])
       case primitiveFromName name of
         Just prim -> Right $ VPrimitive prim
-        Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VList [])
+        Nothing -> Left $ TypeMismatch ("Unknown primitive name: " ++ name) (VArray [])
     ["Closure"] -> do
       closure <- patternSubjectToClosure pat scopeMap resolvingScopes
       Right $ VClosure closure
@@ -721,7 +781,7 @@ patternSubjectToValueWithScopeMap scopeMap resolvingScopes pat = do
       -- Extract the inner pattern and return it as VPattern
       case PatternCore.elements pat of
         [innerPat] -> Right $ VPattern innerPat
-        _ -> Left $ TypeMismatch "Pattern label must have exactly one element" (VList [])
+        _ -> Left $ TypeMismatch "Pattern label must have exactly one element" (VArray [])
     _ -> 
       -- Generic pattern: if it doesn't match any specific value type,
       -- it's already a Pattern, so return it as VPattern
@@ -826,10 +886,10 @@ collectBindings standardLib capturedEnv =
   where
     -- Value equality for deduplication (structural equality)
     valueEqual :: Value -> Value -> Bool
-    valueEqual (VNumber n1) (VNumber n2) = n1 == n2
+    valueEqual (VInteger n1) (VInteger n2) = n1 == n2
     valueEqual (VString s1) (VString s2) = s1 == s2
-    valueEqual (VBool b1) (VBool b2) = b1 == b2
-    valueEqual (VList vs1) (VList vs2) = length vs1 == length vs2 && all (uncurry valueEqual) (zip vs1 vs2)
+    valueEqual (VBoolean b1) (VBoolean b2) = b1 == b2
+    valueEqual (VArray vs1) (VArray vs2) = length vs1 == length vs2 && all (uncurry valueEqual) (zip vs1 vs2)
     valueEqual (VPattern p1) (VPattern p2) = patternEqual p1 p2
     valueEqual (VClosure c1) (VClosure c2) = closureEqual c1 c2
     valueEqual (VPrimitive p1) (VPrimitive p2) = p1 == p2
@@ -1131,9 +1191,9 @@ extractScopeStructure scopePat = do
                 then Right (Just (Right parentRef))  -- Inlined parent scope pattern
               else if Set.null (labels parentSubj) && identity parentSubj /= SubjectCore.Symbol ""
                 then Right (Just (Left (identity parentSubj)))  -- Identifier reference to parent
-                else Left $ TypeMismatch "Parent scope reference must be identifier, empty pattern, or :Scope pattern" (VList [])
+                else Left $ TypeMismatch "Parent scope reference must be identifier, empty pattern, or :Scope pattern" (VArray [])
           Right (parentScope, bindings)
-    else Left $ TypeMismatch "Expected Scope pattern" (VList [])
+    else Left $ TypeMismatch "Expected Scope pattern" (VArray [])
 
 -- | Extracts binding from a Binding pattern
 extractBindingFromPattern :: Map.Map SubjectCore.Symbol (Pattern Subject) -> Set.Set SubjectCore.Symbol -> Pattern Subject -> Either Error (String, Value)
@@ -1151,7 +1211,7 @@ extractBindingFromPattern scopeMap resolvingScopes bindingPat = do
         Just (SubjectValue.VString n) -> 
           let _ = trace ("[DESERIALIZE] extractBindingFromPattern: extracted name=" ++ n) ()
           in Right n
-        _ -> Left $ TypeMismatch ("Binding pattern missing name property. Binding labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VList [])
+        _ -> Left $ TypeMismatch ("Binding pattern missing name property. Binding labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VArray [])
       -- Extract value from single element
       let bindingElements = PatternCore.elements bindingPat
           _ = trace ("[DESERIALIZE] extractBindingFromPattern: bindingElementsCount=" ++ show (length bindingElements)) ()
@@ -1169,8 +1229,8 @@ extractBindingFromPattern scopeMap resolvingScopes bindingPat = do
               in Right v
           let _ = trace ("[DESERIALIZE] extractBindingFromPattern: returning (" ++ name ++ ", " ++ show value ++ ")") ()
           Right (name, value)
-        _ -> Left $ TypeMismatch ("Binding pattern must have exactly one element (the value). Found " ++ show (length bindingElements) ++ " elements. Binding labels: " ++ show bindingLabels) (VList [])
-    else Left $ TypeMismatch ("Expected Binding pattern, got labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VList [])
+        _ -> Left $ TypeMismatch ("Binding pattern must have exactly one element (the value). Found " ++ show (length bindingElements) ++ " elements. Binding labels: " ++ show bindingLabels) (VArray [])
+    else Left $ TypeMismatch ("Expected Binding pattern, got labels: " ++ show bindingLabels ++ ", id: " ++ show bindingId) (VArray [])
 
 -- | Resolves bindings from a scope pattern by following parent chain
 -- For round-trip tests, we need to resolve parent scopes from the serialized structure
@@ -1214,7 +1274,7 @@ resolveScopeBindings scopePat scopeMap resolvingScopes = do
           -- Identifier reference - lookup parent scope in map
           case Map.lookup parentId scopeMap of
             Just parentScopePat -> resolveScopeBindings parentScopePat scopeMap newResolvingScopes
-            Nothing -> Left $ TypeMismatch ("Parent scope not found: " ++ show parentId) (VList [])
+            Nothing -> Left $ TypeMismatch ("Parent scope not found: " ++ show parentId) (VArray [])
       -- Extract direct bindings AFTER resolving parent bindings
       -- This allows nested closures to use parent bindings that are already resolved
       -- Pass parent bindings in scope map so nested closures can access them
@@ -1238,7 +1298,7 @@ resolveScopeBindings scopePat scopeMap resolvingScopes = do
           -- CRITICAL: Verify bindingPatterns is not empty before foldM
           if null bindingPatterns
             then Left $ TypeMismatch ("resolveScopeBindings: bindingPatterns is empty but bindingCount=" ++ show bindingCount ++ 
-                                      ". This should not happen!") (VList [])
+                                      ". This should not happen!") (VArray [])
             else do
               -- Force evaluation and add error context - this WILL be called if bindingCount > 0
               bindings <- case foldM (\acc bp -> do
@@ -1253,7 +1313,7 @@ resolveScopeBindings scopePat scopeMap resolvingScopes = do
                                                        ". Binding labels: " ++ show bindingLabels ++ 
                                                        ", id: " ++ show bindingId ++ 
                                                        ", elementCount: " ++ show bindingElementCount ++
-                                                       ". Error: " ++ show err) (VList [])
+                                                       ". Error: " ++ show err) (VArray [])
                       Right binding -> Right (acc ++ [binding])
                   ) [] bindingPatterns of
                 Left err -> 
@@ -1270,12 +1330,12 @@ resolveScopeBindings scopePat scopeMap resolvingScopes = do
                   in if null bs
                     then Left $ TypeMismatch ("resolveScopeBindings: foldM returned empty list. bindingCount=" ++ show bindingCount ++ 
                                               ", bindingPatterns length=" ++ show (length bindingPatterns) ++
-                                              ". Binding pattern details: " ++ show bindingDebug) (VList [])
+                                              ". Binding pattern details: " ++ show bindingDebug) (VArray [])
                     else Right bs
               -- Double-check: if we have patterns but got no bindings, that's definitely an error
               if null bindings && bindingCount > 0
                 then Left $ TypeMismatch ("resolveScopeBindings: FINAL CHECK - extracted 0 bindings from " ++ show bindingCount ++ 
-                                          " binding patterns after foldM. Binding pattern details: " ++ show bindingDebug) (VList [])
+                                          " binding patterns after foldM. Binding pattern details: " ++ show bindingDebug) (VArray [])
                 else Right bindings
       -- DEBUG: Log binding extraction
       let extractedCount = length directBindings
@@ -1336,7 +1396,7 @@ patternSubjectToClosure pat outerScopeMap resolvingScopes = do
       let elements = PatternCore.elements pat
       -- Closure should have 2 elements: [e1:Scope | ...] and [:Lambda | ...]
       if length elements /= 2
-        then Left $ TypeMismatch "Closure pattern must have 2 elements (Scope and Lambda)" (VList [])
+        then Left $ TypeMismatch "Closure pattern must have 2 elements (Scope and Lambda)" (VArray [])
         else do
           let scopePat = elements !! 0
               lambdaPat = elements !! 1
@@ -1367,7 +1427,7 @@ patternSubjectToClosure pat outerScopeMap resolvingScopes = do
                              ". Scope has " ++ show scopeElementsCount ++ " elements: " ++ show (map (\e -> (Set.toList (labels (PatternCore.value e)), identity (PatternCore.value e))) scopeElements)
               -- If we got no bindings but extractScopeStructure found binding patterns, this is an error
               if null allBindings && not (null bindingPatterns)
-                then Left $ TypeMismatch ("No bindings resolved from scope. " ++ debugInfo) (VList [])
+                then Left $ TypeMismatch ("No bindings resolved from scope. " ++ debugInfo) (VArray [])
                 else do
                   -- Extract lambda structure
                   let lambdaSubj = PatternCore.value lambdaPat
@@ -1376,7 +1436,7 @@ patternSubjectToClosure pat outerScopeMap resolvingScopes = do
                       let lambdaElements = PatternCore.elements lambdaPat
                       -- Lambda should have 2 elements: [:Parameters | ...] and [:Body | ...]
                       if length lambdaElements /= 2
-                        then Left $ TypeMismatch "Lambda pattern must have 2 elements (Parameters and Body)" (VList [])
+                        then Left $ TypeMismatch "Lambda pattern must have 2 elements (Parameters and Body)" (VArray [])
                         else do
                           let paramsPat = lambdaElements !! 0
                               bodyPat = lambdaElements !! 1
@@ -1405,9 +1465,9 @@ patternSubjectToClosure pat outerScopeMap resolvingScopes = do
                               -- Extract body with identifier resolution
                               bodyExpr <- patternSubjectToExprWithBindings identifierToName bodyPat
                               Right $ Closure paramNames bodyExpr capturedEnv
-                            else Left $ TypeMismatch "Expected Parameters pattern" (VList [])
-                    else Left $ TypeMismatch "Expected Lambda pattern" (VList [])
-    else Left $ TypeMismatch "Expected Closure pattern" (VList [])
+                            else Left $ TypeMismatch "Expected Parameters pattern" (VArray [])
+                    else Left $ TypeMismatch "Expected Lambda pattern" (VArray [])
+    else Left $ TypeMismatch "Expected Closure pattern" (VArray [])
 
 -- | Helper to extract parameter name from a Symbol pattern
 extractParamName :: Pattern Subject -> Either Error String
@@ -1416,8 +1476,8 @@ extractParamName pat = do
   if "Symbol" `Set.member` labels subj
     then case Map.lookup "name" (properties subj) of
       Just (SubjectValue.VString name) -> Right name
-      _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VList [])
-    else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VList [])
+      _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VArray [])
+    else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VArray [])
 
 -- | Serializes a program (list of values) to Gram notation with file-level structure.
 -- Format:
@@ -1456,7 +1516,7 @@ gramToProgram gramText = do
   -- Split by lines and parse each pattern
   let lines' = filter (not . null) $ map (dropWhile (== ' ')) $ lines gramText
   case lines' of
-    [] -> Left $ TypeMismatch "Empty Gram file" (VList [])
+    [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
     (metadataLine : valueLines) -> do
       -- Parse first pattern as file metadata
       metadataPat <- case fromGram metadataLine of
@@ -1476,5 +1536,5 @@ gramToProgram gramText = do
           values <- mapM patternSubjectToValue valuePatterns
           -- Return values with standard library environment
           Right (values, initialEnv)
-        _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VList [])
+        _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
 

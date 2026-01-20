@@ -109,19 +109,19 @@ evalPatternElements :: Pattern Subject -> EvalM Value
 evalPatternElements pat = do
   let elems = PatternCore.elements pat
   patternVals <- mapM (\p -> return $ VPattern p) elems
-  return $ VList patternVals
+  return $ VArray patternVals
 
 -- | Returns the number of direct elements (not recursive).
 evalPatternLength :: Pattern Subject -> EvalM Value
 evalPatternLength pat = do
   let elems = PatternCore.elements pat
-  return $ VNumber (fromIntegral $ length elems)
+  return $ VInteger (fromIntegral $ length elems)
 
 -- | Returns the total node count (recursive).
 evalPatternSize :: Pattern Subject -> EvalM Value
 evalPatternSize pat = do
   let size = patternSize pat
-  return $ VNumber size
+  return $ VInteger size
   where
     patternSize :: Pattern Subject -> Integer
     patternSize p = 1 + sum (map patternSize (PatternCore.elements p))
@@ -130,7 +130,7 @@ evalPatternSize pat = do
 evalPatternDepth :: Pattern Subject -> EvalM Value
 evalPatternDepth pat = do
   let depth = patternDepth pat
-  return $ VNumber depth
+  return $ VInteger depth
   where
     patternDepth :: Pattern Subject -> Integer
     patternDepth p
@@ -141,7 +141,7 @@ evalPatternDepth pat = do
 evalPatternValues :: Pattern Subject -> EvalM Value
 evalPatternValues pat = do
   let values = patternValues pat
-  return $ VList values
+  return $ VArray values
   where
     patternValues :: Pattern Subject -> [Value]
     patternValues p = 
@@ -153,20 +153,20 @@ evalPatternValues pat = do
 -- This enables all s-expressions to be represented as Pattern Subject.
 -- 
 -- * VPattern: Returns the pattern directly
--- * VList: Converts to pattern with elements (empty list becomes atomic pattern)
+-- * VArray: Converts to pattern with elements (empty array becomes atomic pattern)
 -- * Other values: Converts to Subject and wraps in atomic pattern
 valueToPatternSubject :: Value -> EvalM (Pattern Subject)
 valueToPatternSubject (VPattern pat) = return pat
-valueToPatternSubject (VList []) = do
-  -- Empty list becomes atomic pattern with empty Subject decoration
+valueToPatternSubject (VArray []) = do
+  -- Empty array becomes atomic pattern with empty Subject decoration
   let emptySubject = SubjectCore.Subject
         { identity = SubjectCore.Symbol ""
         , labels = Set.fromList ["List"]
         , properties = Map.empty
         }
   return $ point emptySubject
-valueToPatternSubject (VList (v:vs)) = do
-  -- Non-empty list: convert to pattern with elements
+valueToPatternSubject (VArray (v:vs)) = do
+  -- Non-empty array: convert to pattern with elements
   -- Decoration is empty Subject, elements are recursively converted
   let emptySubject = SubjectCore.Subject
         { identity = SubjectCore.Symbol ""

@@ -17,21 +17,21 @@ import Control.Applicative ((<|>))
 
 -- | Format a Value for display
 formatValue :: Value -> String
-formatValue (VNumber n) = show n
-formatValue (VString s) = T.unpack s
-formatValue (VBool True) = "#t"
-formatValue (VBool False) = "#f"
-formatValue (VList vals) = "(" ++ unwords (map formatValue vals) ++ ")"
+formatValue (VInteger n) = show n
+formatValue (VString s) = "\"" ++ s ++ "\""
+formatValue (VBoolean True) = "#t"
+formatValue (VBoolean False) = "#f"
+formatValue (VArray vals) = "(" ++ unwords (map formatValue vals) ++ ")"
 formatValue (VPattern _) = "<pattern>"
 formatValue (VClosure _) = "<closure>"
 formatValue (VPrimitive _) = "<primitive>"
 
 -- | Format a Value type for display in variable listing
 formatValueType :: Value -> String
-formatValueType (VNumber _) = "Number"
+formatValueType (VInteger _) = "Number"
 formatValueType (VString _) = "String"
-formatValueType (VBool _) = "Bool"
-formatValueType (VList _) = "List"
+formatValueType (VBoolean _) = "Bool"
+formatValueType (VArray _) = "List"
 formatValueType (VPattern _) = "Pattern"
 formatValueType (VClosure (Closure params _ _)) = "Closure(" ++ unwords params ++ ")"
 formatValueType (VPrimitive _) = "Primitive"

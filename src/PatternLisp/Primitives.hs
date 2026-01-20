@@ -73,6 +73,7 @@ initialEnv = Map.fromList
   , ("assoc", VPrimitive MapAssoc)
   , ("dissoc", VPrimitive MapDissoc)
   , ("update", VPrimitive MapUpdate)
-  , ("hash-map", VPrimitive HashMap)
+  , ("record", VPrimitive Record)
+  , ("hash-map", VPrimitive Record)  -- Backward compatibility alias (deprecated)
   ]
 

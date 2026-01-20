@@ -26,7 +26,6 @@ import PatternLisp.Syntax
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import qualified Data.Text as T
 import Data.Void
 
 type Parser = Parsec Void String
@@ -55,7 +54,7 @@ parseExpr input = case parse (skipSpace *> exprParser <* eof) "" input of
 
 -- | Main expression parser (recursive)
 exprParser :: Parser Expr
-exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> try mapParser <|> listParser) <* skipSpace
+exprParser = skipSpace *> (quoteParser <|> atomParser <|> try setParser <|> try recordParser <|> listParser) <* skipSpace
 
 -- | Atom parser (keyword, symbol, number, string, bool)
 -- Try keywords before symbols to catch postfix colon syntax
@@ -87,10 +86,11 @@ numberParser :: Parser Atom
 numberParser = try (Number <$> L.signed skipSpace L.decimal) <?> "number"
 
 -- | String parser (with escapes)
+-- Returns String (not Text) to match gram types (Option B)
 stringParser :: Parser Atom
-stringParser = String . T.pack <$> (char '"' *> manyTill stringChar (char '"'))
+stringParser = String <$> (char '"' *> manyTill stringChar (char '"'))
   where
-    stringChar = escapedChar <|> noneOf ['"', '\\']
+    stringChar = escapedChar <|> satisfy (\c -> c /= '"' && c /= '\\')
     escapedChar = char '\\' *> (escapeSeq <|> anySingle)
     escapeSeq = (char 'n' *> pure '\n')
             <|> (char 't' *> pure '\t')
@@ -112,24 +112,38 @@ setParser = do
   _ <- char '}'
   return $ SetLiteral exprs
 
--- | Map parser (curly brace syntax {key: value ...})
--- Maps use alternating key-value pairs where keys can be keywords or strings
-mapParser :: Parser Expr
-mapParser = do
+-- | Record parser (curly brace syntax {key: value, ...})
+-- Records use comma-separated key-value pairs (gram-compatible syntax)
+-- Gram supports both single colon {k: v} and double colon {k:: v}
+-- TODO: This will be replaced with gram parser delegation in Phase 3 (T021-T027)
+-- For now, basic parser that will be replaced
+recordParser :: Parser Expr
+recordParser = do
   _ <- char '{'
   skipSpace
-  pairs <- many (mapPair <* skipSpace)
+  pairs <- sepBy recordPair (skipSpace *> char ',' <* skipSpace)
   skipSpace
   _ <- char '}'
-  return $ MapLiteral (concat pairs)  -- Flatten pairs into single list
+  return $ RecordLiteral pairs
   where
-    mapPair = do
-      key <- try keywordParser <|> stringParser  -- Key can be keyword or string
+    recordPair = do
+      -- Parse key: can be identifier (for keywords) or string
+      -- Use symbolParser (not keywordParser) so we can handle the colon ourselves
+      keyAtom <- try (Symbol <$> identifier) <|> stringParser
       skipSpace
-      -- For string keys, no colon needed (already quoted)
-      -- For keyword keys, colon is part of the keyword syntax
+      -- Parse colon(s): gram supports both : and ::
+      -- Try double colon first, fall back to single colon
+      _ <- try (string "::") <|> string ":"
+      skipSpace
       value <- exprParser
-      return [Atom key, value]
+      let keyStr = case keyAtom of
+            Symbol name -> name  -- Identifier becomes string key
+            String s -> s
+            _ -> ""  -- Fallback (shouldn't happen)
+      return (keyStr, value)
+    identifier = (:) <$> firstChar <*> many restChar
+    firstChar = letterChar <|> satisfy (\c -> c `elem` ("!$%&*+-./<=>?@^_~" :: String))
+    restChar = firstChar <|> digitChar
 
 -- | List parser (parentheses)
 listParser :: Parser Expr
