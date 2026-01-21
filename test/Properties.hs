@@ -3,7 +3,6 @@ module Properties (spec) where
 import Test.Hspec
 import Test.QuickCheck
 import PatternLisp.Syntax
-import PatternLisp.Syntax (MapKey(..), KeywordKey(..))
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
@@ -33,7 +32,7 @@ instance Arbitrary Atom where
   arbitrary = oneof
     [ Symbol <$> genSymbol
     , Number <$> arbitrary
-    , String . T.pack <$> genString
+    , String <$> genString
     , Bool <$> arbitrary
     , Keyword <$> genKeyword
     ]
@@ -53,17 +52,17 @@ instance Arbitrary Value where
   arbitrary = sized valueGen
     where
       valueGen 0 = oneof
-        [ VNumber <$> arbitrary
-        , VString . T.pack <$> genString
-        , VBool <$> arbitrary
+        [ VInteger <$> arbitrary
+        , VString <$> genString
+        , VBoolean <$> arbitrary
         , VKeyword <$> genKeyword
         ]
       valueGen n = oneof
-        [ VNumber <$> arbitrary
-        , VString . T.pack <$> genString
-        , VBool <$> arbitrary
+        [ VInteger <$> arbitrary
+        , VString <$> genString
+        , VBoolean <$> arbitrary
         , VKeyword <$> genKeyword
-        , VList <$> resize 3 (listOf (valueGen (n `div` 2)))
+        , VArray <$> resize 3 (listOf (valueGen (n `div` 2)))
         , VSet <$> (Set.fromList <$> resize 3 (listOf (valueGen (n `div` 2))))
         , VMap <$> (Map.fromList <$> resize 3 (listOf genMapEntry))
         ]
@@ -75,7 +74,7 @@ instance Arbitrary Value where
       genMapEntry = do
         key <- genKeyword
         val <- valueGen 2  -- Limit nesting depth
-        return (KeyKeyword (KeywordKey key), val)
+        return (key, val)
 
 -- | Substitute a variable in an expression with a value
 substitute :: Expr -> String -> Value -> Expr
@@ -88,10 +87,10 @@ substitute (Quote expr) var val = Quote (substitute expr var val)
 
 -- | Convert a Value to an Expr (for substitution)
 valueToExpr :: Value -> Expr
-valueToExpr (VNumber n) = Atom (Number n)
+valueToExpr (VInteger n) = Atom (Number n)
 valueToExpr (VString s) = Atom (String s)
-valueToExpr (VBool b) = Atom (Bool b)
-valueToExpr (VList vals) = List (map valueToExpr vals)
+valueToExpr (VBoolean b) = Atom (Bool b)
+valueToExpr (VArray vals) = List (map valueToExpr vals)
 valueToExpr (VKeyword k) = Atom (Keyword k)
 valueToExpr (VSet _) = Atom (Symbol "<set>")  -- Sets can't be easily converted to Expr
 valueToExpr (VMap _) = Atom (Symbol "<map>")  -- Maps can't be easily converted to Expr
@@ -118,7 +117,7 @@ prop_closure_capture :: Property
 prop_closure_capture = 
   -- Create a closure that uses a variable from outer scope
   let outerVar = "x"
-      outerVal = VNumber 10
+      outerVal = VInteger 10
       -- (let ((x 10)) ((lambda (y) (+ x y)) 5)) should evaluate to 15
       expr = List [Atom (Symbol "let")
                   , List [List [Atom (Symbol "x"), Atom (Number 10)]]
@@ -127,7 +126,7 @@ prop_closure_capture =
                               , List [Atom (Symbol "+"), Atom (Symbol "x"), Atom (Symbol "y")]]
                         , Atom (Number 5)]]
   in case evalExpr expr initialEnv of
-    Right (VNumber 15) -> property True
+    Right (VInteger 15) -> property True
     _ -> property False
 
 -- | Property: Evaluation order
@@ -140,7 +139,7 @@ prop_evaluation_order =
                   , List [Atom (Symbol "*"), Atom (Number 2), Atom (Number 3)]
                   , List [Atom (Symbol "*"), Atom (Number 4), Atom (Number 5)]]
   in case evalExpr expr initialEnv of
-    Right (VNumber 26) -> property True  -- (2*3) + (4*5) = 6 + 20 = 26
+    Right (VInteger 26) -> property True  -- (2*3) + (4*5) = 6 + 20 = 26
     _ -> property False
 
 -- | Property: Let binding shadowing
@@ -153,7 +152,7 @@ prop_let_shadowing =
                          , List [List [Atom (Symbol "x"), Atom (Number 20)]]
                          , Atom (Symbol "x")]]
   in case evalExpr expr initialEnv of
-    Right (VNumber 20) -> property True  -- Inner x should shadow outer x
+    Right (VInteger 20) -> property True  -- Inner x should shadow outer x
     _ -> property False
 
 -- | Property: Closure environment isolation
@@ -215,7 +214,7 @@ spec = describe "Property-Based Tests" $ do
                                                , Atom (Keyword keyStr)
                                                , valueToExpr val]
                                         , Atom (Keyword keyStr)]) initialEnv of
-              Right (VMap resultMap) -> Map.lookup (KeyKeyword (KeywordKey keyStr)) resultMap
+              Right (VMap resultMap) -> Map.lookup keyStr resultMap
               _ -> Nothing
         in case result of
           Just v -> v === val
@@ -229,11 +228,11 @@ spec = describe "Property-Based Tests" $ do
             keyStr = case key of
               VKeyword k -> k
               _ -> "test-key"
-            wasPresent = Map.member (KeyKeyword (KeywordKey keyStr)) m'
+            wasPresent = Map.member keyStr m'
             result = case evalExpr (List [Atom (Symbol "dissoc")
                                         , valueToExpr (VMap m')
                                         , Atom (Keyword keyStr)]) initialEnv of
-              Right (VMap resultMap) -> Map.member (KeyKeyword (KeywordKey keyStr)) resultMap
+              Right (VMap resultMap) -> Map.member keyStr resultMap
               _ -> True
         in if wasPresent
           then property (not result)  -- If key was present, it should not be after dissoc

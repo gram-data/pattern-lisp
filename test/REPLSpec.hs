@@ -10,10 +10,10 @@ import qualified Data.Map as Map
 
 -- | Format a Value type for display in variable listing
 formatValueType :: Value -> String
-formatValueType (VNumber _) = "Number"
+formatValueType (VInteger _) = "Number"
 formatValueType (VString _) = "String"
-formatValueType (VBool _) = "Bool"
-formatValueType (VList _) = "List"
+formatValueType (VBoolean _) = "Bool"
+formatValueType (VArray _) = "List"
 formatValueType (VPattern _) = "Pattern"
 formatValueType (VClosure (Closure params _ _)) = "Closure(" ++ unwords params ++ ")"
 formatValueType (VPrimitive _) = "Primitive"
@@ -48,19 +48,19 @@ spec = describe "REPL" $ do
   describe "Basic functionality" $ do
     it "parses and evaluates simple expression" $ do
       let (output, _, _) = processREPLLine "(+ 1 2)" initialEnv
-      output `shouldBe` "VNumber 3\n"
+      output `shouldBe` "VInteger 3\n"
     
     it "handles define and uses defined variable" $ do
       let (output1, env1, _) = processREPLLine "(define x 10)" initialEnv
       output1 `shouldBe` "VString \"x\"\n"
       let (output2, _, _) = processREPLLine "(+ x 5)" env1
-      output2 `shouldBe` "VNumber 15\n"
+      output2 `shouldBe` "VInteger 15\n"
     
     it "maintains environment across iterations" $ do
       let (_, env1, _) = processREPLLine "(define x 10)" initialEnv
       let (_, env2, _) = processREPLLine "(define y 20)" env1
       let (output, _, _) = processREPLLine "(+ x y)" env2
-      output `shouldBe` "VNumber 30\n"
+      output `shouldBe` "VInteger 30\n"
   
   describe "Error handling" $ do
     it "handles parse errors gracefully" $ do
@@ -76,7 +76,7 @@ spec = describe "REPL" $ do
     it "continues after errors" $ do
       let (_, env1, _) = processREPLLine "undefined-var" initialEnv
       let (output, _, _) = processREPLLine "(+ 1 2)" env1
-      output `shouldBe` "VNumber 3\n"
+      output `shouldBe` "VInteger 3\n"
   
   describe "Commands" $ do
     it "handles :quit command" $ do

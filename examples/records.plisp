@@ -1,0 +1,131 @@
+;; Records Examples
+;; This file demonstrates the usage of records in Pattern Lisp
+;; Records use the inline notation {key: value, ...} and are gram-compatible
+
+;; ============================================================================
+;; Basic Record Creation
+;; ============================================================================
+
+;; Create a simple record
+{name: "Alice", age: 30, active: true}
+
+;; Empty record
+{}
+
+;; Records with different value types
+{name: "Bob", age: 25, score: 95.5, tags: ["developer", "senior"]}
+
+;; ============================================================================
+;; Record Operations
+;; ============================================================================
+
+;; Type checking
+(record? {name: "Alice"})  ;; => true
+(record? "not a record")    ;; => false
+
+;; Access values
+(get {name: "Alice", age: 30} "name")  ;; => "Alice"
+(get {name: "Alice", age: 30} "age")   ;; => 30
+(get {name: "Alice"} "email" "unknown")  ;; => "unknown" (default value)
+
+;; Check for keys
+(has? {name: "Alice", age: 30} "name")   ;; => true
+(has? {name: "Alice", age: 30} "email")  ;; => false
+
+;; Get all keys
+(keys {name: "Alice", age: 30})  ;; => ("name" "age")
+
+;; Get all values
+(values {name: "Alice", age: 30})  ;; => ("Alice" 30)
+
+;; ============================================================================
+;; Record Modification (Immutable)
+;; ============================================================================
+
+;; Add or update a key (returns new record)
+(assoc {name: "Alice"} "age" 30)  ;; => {name: "Alice", age: 30}
+(assoc {name: "Alice", age: 30} "age" 31)  ;; => {name: "Alice", age: 31}
+
+;; Remove a key (returns new record)
+(dissoc {name: "Alice", age: 30} "age")  ;; => {name: "Alice"}
+
+;; Merge records (right record takes precedence)
+(merge {name: "Alice", age: 30} {age: 31, city: "NYC"})  ;; => {name: "Alice", age: 31, city: "NYC"}
+
+;; ============================================================================
+;; Nested Records
+;; ============================================================================
+
+;; Create nested records
+{user: {name: "Bob", email: "bob@example.com"},
+ config: {debug: true, verbose: false}}
+
+;; Access nested values
+(get (get {user: {name: "Bob"}} "user") "name")  ;; => "Bob"
+
+;; ============================================================================
+;; Record Transformations
+;; ============================================================================
+
+;; Map over record values
+(map (lambda (k v) (* v 2)) {a: 1, b: 2, c: 3})  ;; => {a: 2, b: 4, c: 6}
+
+;; Filter record entries
+(filter (lambda (k v) (> v 2)) {a: 1, b: 2, c: 3, d: 4})  ;; => {c: 3, d: 4}
+
+;; ============================================================================
+;; Record Conversion
+;; ============================================================================
+
+;; Convert record to association list
+(record->alist {name: "Alice", age: 30})  ;; => (("name" "Alice") ("age" 30))
+
+;; Convert association list to record
+(alist->record (("name" "Alice") ("age" 30)))  ;; => {name: "Alice", age: 30}
+
+;; ============================================================================
+;; Programmatic Record Creation
+;; ============================================================================
+
+;; Create records programmatically
+(record "name" "Alice" "age" 30)  ;; => {name: "Alice", age: 30}
+
+;; ============================================================================
+;; Quasiquotation with Records
+;; ============================================================================
+
+;; Unquote values in records
+(let ((name "Alice")
+      (age 30))
+  `{name: ,name, age: ,age})  ;; => {name: "Alice", age: 30}
+
+;; Splice records together
+(let ((base {role: "Engineer"})
+      (extra {name: "Alice", age: 30}))
+  `{,@base, ,@extra})  ;; => {role: "Engineer", name: "Alice", age: 30}
+
+;; Combined unquoting and splicing
+(let ((name "Alice")
+      (metadata {age: 30, city: "NYC"}))
+  `{name: ,name, ,@metadata})  ;; => {name: "Alice", age: 30, city: "NYC"}
+
+;; ============================================================================
+;; Real-World Examples
+;; ============================================================================
+
+;; User profile
+{id: 1,
+ name: "Alice",
+ email: "alice@example.com",
+ roles: ["admin", "user"],
+ settings: {theme: "dark", notifications: true}}
+
+;; Configuration object
+{server: {host: "localhost", port: 8080},
+ database: {host: "db.example.com", port: 5432},
+ features: {logging: true, caching: false}}
+
+;; Pattern subject representation
+{identity: "person-123",
+ labels: ["Person", "Employee"],
+ properties: {name: "Bob", department: "Engineering"}}

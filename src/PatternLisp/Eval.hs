@@ -33,9 +33,9 @@ import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Maybe (catMaybes)
 import Control.Monad.Reader
 import Control.Monad.Except
-import qualified Data.Text as T
 
 -- | Evaluation monad: ReaderT for environment, Except for errors
 -- Note: For define, we need to track environment changes, so we use a custom approach
@@ -79,7 +79,7 @@ evalWithEnv expr = do
       val <- eval valueExpr
       let newEnv = Map.insert name val currentEnv
       local (const newEnv) $ do
-        return $ EvalResult (VString (T.pack name)) newEnv
+        return $ EvalResult (VString name) newEnv
     List (Atom (Symbol "begin"):exprs) -> do
       -- Evaluate all expressions in begin, threading environment through
       evalBeginWithEnv exprs currentEnv
@@ -90,32 +90,61 @@ evalWithEnv expr = do
 
 -- | Main evaluation function
 eval :: Expr -> EvalM Value
--- | Convert a Value to a MapKey (keyword or string)
-valueToMapKey :: Value -> Either Error MapKey
-valueToMapKey (VKeyword name) = Right $ KeyKeyword (KeywordKey name)
-valueToMapKey (VString s) = Right $ KeyString (T.unpack s)
-valueToMapKey v = Left $ TypeMismatch ("Map keys must be keywords or strings, got: " ++ show v) v
+
+-- | Convert a Value to a String key for record operations.
+--
+-- Accepts keywords and strings as valid keys.
+-- Returns an error for other value types.
+--
+-- Examples:
+--
+-- > valueToStringKey (VKeyword "name")  -- Right "name"
+-- > valueToStringKey (VString "age")    -- Right "age"
+-- > valueToStringKey (VInteger 42)       -- Left (TypeMismatch ...)
+valueToStringKey :: Value -> Either Error String
+valueToStringKey (VKeyword name) = Right name
+valueToStringKey (VString s) = Right s
+valueToStringKey v = Left $ TypeMismatch ("Record keys must be keywords or strings, got: " ++ show v) v
 
 eval (Atom atom) = evalAtom atom
+eval (ArrayLiteral exprs) = do
+  vals <- mapM eval exprs
+  return $ VArray vals
 eval (SetLiteral exprs) = do
   vals <- mapM eval exprs
   return $ VSet (Set.fromList vals)  -- Remove duplicates automatically
-eval (MapLiteral pairs) = do
-  -- Pairs is a list of alternating [key, value, key, value, ...]
-  -- We need to process them in pairs and handle duplicate keys (last wins)
-  -- Process left-to-right so that later keys overwrite earlier ones
-  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+-- | Evaluate a record literal to a VMap value.
+--
+-- Processes key-value pairs from left to right, with duplicate keys
+-- handled by last-wins semantics.
+--
+-- Supports quasiquotation:
+-- * @Unquote expr@: Evaluates expression and uses as value
+-- * @UnquoteSplice expr@: Evaluates to record and merges entries (key is ignored)
+--
+-- Returns @VMap (Map String Value)@ representing the record.
+eval (RecordLiteral pairs) = do
+  let processPairs :: Map.Map String Value -> [(String, Expr)] -> EvalM (Map.Map String Value)
       processPairs acc [] = return acc
-      processPairs acc (k:v:rest) = do
-        keyVal <- eval k
-        valVal <- eval v
-        case valueToMapKey keyVal of
-          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
-          Left err -> throwError err
-      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+      processPairs acc ((keyStr, valExpr):rest) = do
+        case valExpr of
+          UnquoteSplice expr -> do
+            -- Splice: evaluate to record and merge its entries (ignore keyStr)
+            recordVal <- eval expr
+            case recordVal of
+              VMap spliceMap -> processPairs (Map.union spliceMap acc) rest  -- Merge entries
+              _ -> throwError $ TypeMismatch ("record splice expects record, but got: " ++ show recordVal) recordVal
+          Unquote expr -> do
+            -- Unquote: evaluate expression and use as value
+            valVal <- eval expr
+            processPairs (Map.insert keyStr valVal acc) rest
+          _ -> do
+            -- Normal evaluation
+            valVal <- eval valExpr
+            processPairs (Map.insert keyStr valVal acc) rest
   m <- processPairs Map.empty pairs
   return $ VMap m
-eval (List []) = return $ VList []
+eval (List []) = return $ VArray []
 eval (List (Atom (Symbol "lambda"):rest)) = evalLambda rest
 eval (List (Atom (Symbol "if"):rest)) = evalIf rest
 eval (List (Atom (Symbol "let"):rest)) = evalLet rest
@@ -127,12 +156,14 @@ eval (List (func:args)) = do
   argVals <- mapM eval args
   applyFunction funcVal argVals
 eval (Quote expr) = evalQuote expr
+eval (Unquote _) = throwError $ ParseError "Unquote (`,expr) can only appear inside quasiquoted expressions"
+eval (UnquoteSplice _) = throwError $ ParseError "Unquote-splice (`,@expr) can only appear inside quasiquoted expressions"
 
 -- | Evaluate an atom (self-evaluating)
 evalAtom :: Atom -> EvalM Value
-evalAtom (Number n) = return $ VNumber n
+evalAtom (Number n) = return $ VInteger n
 evalAtom (String s) = return $ VString s
-evalAtom (Bool b) = return $ VBool b
+evalAtom (Bool b) = return $ VBoolean b
 evalAtom (Keyword name) = return $ VKeyword name  -- Keywords are self-evaluating, no environment lookup
 evalAtom (Symbol name) = do
   currentEnv <- ask
@@ -154,19 +185,19 @@ applyPrimitive Add args
   | length args < 2 = throwError $ ArityMismatch "+" 2 (length args)
   | otherwise = do
       nums <- mapM expectNumber args
-      return $ VNumber $ sum nums
+      return $ VInteger $ sum nums
 applyPrimitive Sub args = case args of
   [] -> throwError $ ArityMismatch "-" 1 0
   [x] -> do
     n <- expectNumber x
-    return $ VNumber (-n)
+    return $ VInteger (-n)
   (x:xs) -> do
     n <- expectNumber x
     ns <- mapM expectNumber xs
-    return $ VNumber $ n - sum ns
+    return $ VInteger $ n - sum ns
 applyPrimitive Mul args = do
   nums <- mapM expectNumber args
-  return $ VNumber $ product nums
+  return $ VInteger $ product nums
 applyPrimitive Div args = case args of
   [] -> throwError $ ArityMismatch "/" 1 0
   [x] -> do
@@ -174,42 +205,42 @@ applyPrimitive Div args = case args of
     if n == 0
       then throwError $ DivisionByZero (Atom (Number 1))
         -- Error: "Division by zero in unary division: (/ " ++ show x ++ ")"
-      else return $ VNumber (1 `div` n)
+      else return $ VInteger (1 `div` n)
   (x:xs) -> do
     n <- expectNumber x
     ns <- mapM expectNumber xs
     if any (== 0) ns
       then throwError $ DivisionByZero (Atom (Number 1))
         -- Error: "Division by zero in division: (/ " ++ show x ++ " " ++ unwords (map show xs) ++ ")"
-      else return $ VNumber $ foldl div n ns
+      else return $ VInteger $ foldl div n ns
 applyPrimitive Gt args = case args of
   [x, y] -> do
     nx <- expectNumber x
     ny <- expectNumber y
-    return $ VBool (nx > ny)
+    return $ VBoolean (nx > ny)
   _ -> throwError $ ArityMismatch ">" 2 (length args)
 applyPrimitive Lt args = case args of
   [x, y] -> do
     nx <- expectNumber x
     ny <- expectNumber y
-    return $ VBool (nx < ny)
+    return $ VBoolean (nx < ny)
   _ -> throwError $ ArityMismatch "<" 2 (length args)
 applyPrimitive Eq args = case args of
-  [x, y] -> return $ VBool (x == y)  -- Use Eq instance for Value (handles all types including keywords)
+  [x, y] -> return $ VBoolean (x == y)  -- Use Eq instance for Value (handles all types including keywords)
   _ -> throwError $ ArityMismatch "=" 2 (length args)
 applyPrimitive Ne args = case args of
   [x, y] -> do
     nx <- expectNumber x
     ny <- expectNumber y
-    return $ VBool (nx /= ny)
+    return $ VBoolean (nx /= ny)
   _ -> throwError $ ArityMismatch "/=" 2 (length args)
 applyPrimitive StringAppend args = do
   strs <- mapM expectString args
-  return $ VString $ T.concat strs
+  return $ VString $ concat strs
 applyPrimitive StringLength args = case args of
   [s] -> do
     str <- expectString s
-    return $ VNumber $ fromIntegral $ T.length str
+    return $ VInteger $ fromIntegral $ length str
   _ -> throwError $ ArityMismatch "string-length" 1 (length args)
 applyPrimitive Substring args = case args of
   [s, start, end] -> do
@@ -218,17 +249,17 @@ applyPrimitive Substring args = case args of
     endNum <- expectNumber end
     let startIdx = fromIntegral startNum
         endIdx = fromIntegral endNum
-    if startIdx < 0 || endIdx > T.length str || startIdx > endIdx
-      then throwError $ TypeMismatch "Invalid substring indices" (VList [])
-      else return $ VString $ T.take (endIdx - startIdx) $ T.drop startIdx str
+    if startIdx < 0 || endIdx > length str || startIdx > endIdx
+      then throwError $ TypeMismatch "Invalid substring indices" (VArray [])
+      else return $ VString $ take (endIdx - startIdx) $ drop startIdx str
   _ -> throwError $ ArityMismatch "substring" 3 (length args)
 applyPrimitive Pure args = case args of
   [val] -> evalPatternCreate val
   _ -> throwError $ ArityMismatch "pure" 1 (length args)
 applyPrimitive PatternCreate args = case args of
-  [decoration, VList elements] -> evalPatternWith decoration elements
+  [decoration, VArray elements] -> evalPatternWith decoration elements
   [_] -> throwError $ ArityMismatch "pattern" 2 (length args)
-  [_, _] -> throwError $ TypeMismatch "pattern expects list of elements as second argument" (VList [])
+  [_, _] -> throwError $ TypeMismatch "pattern expects list of elements as second argument" (VArray [])
   _ -> throwError $ ArityMismatch "pattern" 2 (length args)
 -- Pattern query primitives
 applyPrimitive PatternValue args = case args of
@@ -281,9 +312,9 @@ applyPrimitive PatternToValue args = case args of
   _ -> throwError $ ArityMismatch "pattern-to-value" 1 (length args)
 -- Set operation primitives
 applyPrimitive SetContains args = case args of
-  [VSet s, val] -> return $ VBool (Set.member val s)
-  [VMap m, keyVal] -> case valueToMapKey keyVal of
-    Right mapKey -> return $ VBool (Map.member mapKey m)  -- Also handle maps
+  [VSet s, val] -> return $ VBoolean (Set.member val s)
+  [VMap m, keyVal] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ VBoolean (Map.member keyStr m)  -- Also handle maps
     Left err -> throwError err
   [v, _] -> throwError $ TypeMismatch ("contains? expects set or map as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "contains?" 2 (length args)
@@ -308,89 +339,194 @@ applyPrimitive SetSymmetricDifference args = case args of
   [v, _] -> throwError $ TypeMismatch ("set-symmetric-difference expects set as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "set-symmetric-difference" 2 (length args)
 applyPrimitive SetSubset args = case args of
-  [VSet s1, VSet s2] -> return $ VBool (Set.isSubsetOf s1 s2)
+  [VSet s1, VSet s2] -> return $ VBoolean (Set.isSubsetOf s1 s2)
   [VSet _, v] -> throwError $ TypeMismatch ("set-subset? expects set as second argument, but got: " ++ show v) v
   [v, _] -> throwError $ TypeMismatch ("set-subset? expects set as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "set-subset?" 2 (length args)
 applyPrimitive SetEqual args = case args of
-  [VSet s1, VSet s2] -> return $ VBool (s1 == s2)
+  [VSet s1, VSet s2] -> return $ VBoolean (s1 == s2)
   [VSet _, v] -> throwError $ TypeMismatch ("set-equal? expects set as second argument, but got: " ++ show v) v
   [v, _] -> throwError $ TypeMismatch ("set-equal? expects set as first argument, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "set-equal?" 2 (length args)
 applyPrimitive SetEmpty args = case args of
-  [VSet s] -> return $ VBool (Set.null s)
-  [VMap m] -> return $ VBool (Map.null m)  -- Also handle maps
+  [VSet s] -> return $ VBoolean (Set.null s)
+  [VMap m] -> return $ VBoolean (Map.null m)  -- Also handle maps
   [v] -> throwError $ TypeMismatch ("empty? expects set or map, but got: " ++ show v) v
   _ -> throwError $ ArityMismatch "empty?" 1 (length args)
 applyPrimitive HashSet args = return $ VSet (Set.fromList args)
--- Map operation primitives
-applyPrimitive MapGet args = case args of
-  [VMap m, keyVal] -> case valueToMapKey keyVal of
-    Right mapKey -> return $ case Map.lookup mapKey m of
-      Just val -> val
-      Nothing -> VList []  -- Return empty list as nil
-    Left err -> throwError err
-  [VMap m, keyVal, defaultVal] -> case valueToMapKey keyVal of
-    Right mapKey -> return $ Map.findWithDefault defaultVal mapKey m
-    Left err -> throwError err
-  [v, _] -> throwError $ TypeMismatch ("get expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "get" 2 (length args)
-applyPrimitive MapGetIn args = case args of
-  [VMap m, VList keys] -> do
-    -- keys is a list of keywords or strings: [key1, key2, ...]
-    let getInPath :: Map.Map MapKey Value -> [Value] -> EvalM Value
-        getInPath _ [] = return $ VList []  -- Return nil if path exhausted
-        getInPath currentMap (keyVal:rest) = do
-          case valueToMapKey keyVal of
-            Right mapKey -> case Map.lookup mapKey currentMap of
-              Just (VMap nestedMap) | null rest -> return $ VMap nestedMap  -- Path ends at map, return it
-              Just (VMap nestedMap) -> getInPath nestedMap rest  -- Continue path into nested map
-              Just val | null rest -> return val  -- Path ends at non-map value, return it
-              Just _ -> return $ VList []  -- Path doesn't lead to map, return nil
-              Nothing -> return $ VList []  -- Key not found, return nil
-            Left err -> throwError err
-    getInPath m keys
-  [VMap _, v] -> throwError $ TypeMismatch ("get-in expects list of keywords or strings as second argument, but got: " ++ show v) v
-  [v, _] -> throwError $ TypeMismatch ("get-in expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "get-in" 2 (length args)
-applyPrimitive MapAssoc args = case args of
-  [VMap m, keyVal, val] -> case valueToMapKey keyVal of
-    Right mapKey -> return $ VMap (Map.insert mapKey val m)
-    Left err -> throwError err
-  [v, _, _] -> throwError $ TypeMismatch ("assoc expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "assoc" 3 (length args)
-applyPrimitive MapDissoc args = case args of
-  [VMap m, keyVal] -> case valueToMapKey keyVal of
-    Right mapKey -> return $ VMap (Map.delete mapKey m)
-    Left err -> throwError err
-  [v, _] -> throwError $ TypeMismatch ("dissoc expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "dissoc" 2 (length args)
-applyPrimitive MapUpdate args = case args of
-  [VMap m, keyVal, VClosure closure] -> case valueToMapKey keyVal of
-    Right mapKey -> do
-      -- Get current value or nil (empty list)
-      let currentVal = Map.findWithDefault (VList []) mapKey m
-      -- Apply function to current value
-      updatedVal <- applyClosure closure [currentVal]
-      return $ VMap (Map.insert mapKey updatedVal m)
-    Left err -> throwError err
-  [VMap _, _, v] -> throwError $ TypeMismatch ("update expects closure as third argument, but got: " ++ show v) v
-  [v, _, _] -> throwError $ TypeMismatch ("update expects map as first argument, but got: " ++ show v) v
-  _ -> throwError $ ArityMismatch "update" 3 (length args)
-applyPrimitive HashMap args
+-- | Record constructor: @(record key1 val1 key2 val2 ...)@
+--
+-- Creates a record from alternating key-value pairs.
+-- Requires an even number of arguments.
+-- Keys must be strings or keywords.
+--
+-- Examples:
+--
+-- > (record "name" "Alice" "age" 30)
+-- > -- Returns: {name: "Alice", age: 30}
+applyPrimitive Record args
   | even (length args) = do
       -- Process alternating keyword-value or string-value pairs
       -- Process left-to-right so that later keys overwrite earlier ones
-      let processPairs :: Map.Map MapKey Value -> [Value] -> EvalM (Map.Map MapKey Value)
+      let processPairs :: Map.Map String Value -> [Value] -> EvalM (Map.Map String Value)
           processPairs acc [] = return acc
           processPairs acc (keyVal:val:rest) = do
-            case valueToMapKey keyVal of
-              Right mapKey -> processPairs (Map.insert mapKey val acc) rest
+            case valueToStringKey keyVal of
+              Right keyStr -> processPairs (Map.insert keyStr val acc) rest
               Left err -> throwError err
-          processPairs _ _ = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
+          processPairs _ _ = throwError $ ParseError "record requires even number of arguments (key-value pairs)"
       m <- processPairs Map.empty args
       return $ VMap m
-  | otherwise = throwError $ ParseError "hash-map requires even number of arguments (key-value pairs)"
+  | otherwise = throwError $ ParseError "record requires even number of arguments (key-value pairs)"
+-- | Type predicate: @(record? value)@
+--
+-- Returns @true@ if value is a record, @false@ otherwise.
+applyPrimitive RecordType args = case args of
+  [VMap _] -> return $ VBoolean True
+  [_] -> return $ VBoolean False
+  _ -> throwError $ ArityMismatch "record?" 1 (length args)
+-- | Get value from record: @(get record key [default])@
+--
+-- Returns the value associated with @key@ in @record@.
+-- If key is missing and @default@ is provided, returns @default@.
+-- If key is missing and no default, returns @nil@ (empty array).
+--
+-- Examples:
+--
+-- > (get {name: "Alice"} "name")        -- "Alice"
+-- > (get {name: "Alice"} "age" 0)       -- 0
+-- > (get {name: "Alice"} "email")       -- ()
+applyPrimitive RecordGet args = case args of
+  [VMap m, keyVal] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ case Map.lookup keyStr m of
+      Just val -> val
+      Nothing -> VArray []  -- Return empty array as nil
+    Left err -> throwError err
+  [VMap m, keyVal, defaultVal] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ Map.findWithDefault defaultVal keyStr m
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("get expects record as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "get" 2 (length args)
+-- | Check if record has key: @(has? record key)@
+--
+-- Returns @true@ if @record@ contains @key@, @false@ otherwise.
+applyPrimitive RecordHas args = case args of
+  [VMap m, keyVal] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ VBoolean (Map.member keyStr m)
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("has? expects record as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "has?" 2 (length args)
+-- | Get all keys from record: @(keys record)@
+--
+-- Returns an array of all keys in @record@.
+-- Key order is preserved from record creation.
+applyPrimitive RecordKeys args = case args of
+  [VMap m] -> return $ VArray (map VString (Map.keys m))
+  [v] -> throwError $ TypeMismatch ("keys expects record, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "keys" 1 (length args)
+-- | Get all values from record: @(values record)@
+--
+-- Returns an array of all values in @record@.
+-- Value order matches key order.
+applyPrimitive RecordValues args = case args of
+  [VMap m] -> return $ VArray (Map.elems m)
+  [v] -> throwError $ TypeMismatch ("values expects record, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "values" 1 (length args)
+-- | Convert record to association list: @(record->alist record)@
+--
+-- Returns a list of @[key value]@ pairs.
+-- Useful for iteration and transformation.
+applyPrimitive RecordToAlist args = case args of
+  [VMap m] -> return $ VArray (map (\(k, v) -> VArray [VString k, v]) (Map.toList m))
+  [v] -> throwError $ TypeMismatch ("record->alist expects record, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "record->alist" 1 (length args)
+-- | Convert association list to record: @(alist->record pairs)@
+--
+-- Takes a list of @[key value]@ pairs and creates a record.
+-- Duplicate keys use last-wins semantics.
+applyPrimitive AlistToRecord args = case args of
+  [VArray pairs] -> do
+    let processPairs :: Map.Map String Value -> [Value] -> EvalM (Map.Map String Value)
+        processPairs acc [] = return acc
+        processPairs acc (VArray [VString key, val]:rest) = processPairs (Map.insert key val acc) rest
+        processPairs acc (VArray [keyVal, val]:rest) = do
+          case valueToStringKey keyVal of
+            Right keyStr -> processPairs (Map.insert keyStr val acc) rest
+            Left err -> throwError err
+        processPairs _ (badPair:_) = throwError $ TypeMismatch ("alist->record expects list of [key value] pairs, but got: " ++ show badPair) badPair
+    m <- processPairs Map.empty pairs
+    return $ VMap m
+  [v] -> throwError $ TypeMismatch ("alist->record expects list, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "alist->record" 1 (length args)
+-- | Associate key with value: @(assoc record key value)@
+--
+-- Returns a new record with @key@ set to @value@.
+-- If @key@ already exists, its value is replaced.
+-- Original record is unchanged (immutable).
+applyPrimitive RecordSet args = case args of
+  [VMap m, keyVal, val] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ VMap (Map.insert keyStr val m)
+    Left err -> throwError err
+  [v, _, _] -> throwError $ TypeMismatch ("assoc expects record as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "assoc" 3 (length args)
+-- | Dissociate key from record: @(dissoc record key)@
+--
+-- Returns a new record with @key@ removed.
+-- If @key@ doesn't exist, returns original record unchanged.
+-- Original record is unchanged (immutable).
+applyPrimitive RecordRemove args = case args of
+  [VMap m, keyVal] -> case valueToStringKey keyVal of
+    Right keyStr -> return $ VMap (Map.delete keyStr m)
+    Left err -> throwError err
+  [v, _] -> throwError $ TypeMismatch ("dissoc expects record as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "dissoc" 2 (length args)
+-- | Merge two records: @(merge record1 record2)@
+--
+-- Returns a new record containing all keys from both records.
+-- Keys from @record2@ take precedence over keys from @record1@.
+-- Original records are unchanged (immutable).
+applyPrimitive RecordMerge args = case args of
+  [VMap m1, VMap m2] -> return $ VMap (Map.union m2 m1)  -- m2 takes precedence (right merge)
+  [VMap _, v] -> throwError $ TypeMismatch ("merge expects record as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("merge expects record as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "merge" 2 (length args)
+-- | Map over record entries: @(map fn record)@
+--
+-- Applies @fn@ to each @(key, value)@ pair in @record@.
+-- @fn@ must be a closure that takes two arguments: key and value.
+-- Returns a new record with transformed values.
+-- Original record is unchanged (immutable).
+applyPrimitive RecordMap args = case args of
+  [VClosure closure, VMap m] -> do
+    let mapOverRecord :: Map.Map String Value -> EvalM (Map.Map String Value)
+        mapOverRecord = Map.traverseWithKey (\k v -> do
+          result <- applyClosure closure [VString k, v]
+          return result)
+    mapped <- mapOverRecord m
+    return $ VMap mapped
+  [VClosure _, v] -> throwError $ TypeMismatch ("map expects record as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("map expects closure as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "map" 2 (length args)
+-- | Filter record entries: @(filter pred record)@
+--
+-- Applies @pred@ to each @(key, value)@ pair in @record@.
+-- @pred@ must be a closure that takes two arguments (key, value) and returns a boolean.
+-- Returns a new record containing only entries where @pred@ returns @true@.
+-- Original record is unchanged (immutable).
+applyPrimitive RecordFilter args = case args of
+  [VClosure closure, VMap m] -> do
+    let filterEntry :: String -> Value -> EvalM (Maybe (String, Value))
+        filterEntry k v = do
+          result <- applyClosure closure [VString k, v]
+          case result of
+            VBoolean True -> return $ Just (k, v)
+            VBoolean False -> return Nothing
+            _ -> throwError $ TypeMismatch ("filter predicate must return boolean, but got: " ++ show result) result
+    filteredPairs <- mapM (uncurry filterEntry) (Map.toList m)
+    return $ VMap (Map.fromList (catMaybes filteredPairs))
+  [VClosure _, v] -> throwError $ TypeMismatch ("filter expects record as second argument, but got: " ++ show v) v
+  [v, _] -> throwError $ TypeMismatch ("filter expects closure as first argument, but got: " ++ show v) v
+  _ -> throwError $ ArityMismatch "filter" 2 (length args)
 
 -- | Apply a closure (extend captured environment with arguments)
 applyClosure :: Closure -> [Value] -> EvalM Value
@@ -431,13 +567,13 @@ evalPatternFind pat predVal = do
               extendedEnv = Map.union bindings capturedEnv
           result <- local (const extendedEnv) (eval bodyExpr)
           case result of
-            VBool b -> return b
+            VBoolean b -> return b
             _ -> throwError $ TypeMismatch 
                    "predicate must return boolean" result
         _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
     
     findInElements :: [Pattern Subject] -> Closure -> EvalM Value
-    findInElements [] _ = return $ VList []
+    findInElements [] _ = return $ VArray []
     findInElements (p:ps) closure = do
       matches <- applyPredicate closure p
       if matches
@@ -455,7 +591,7 @@ evalPatternAny pat predVal = do
     VClosure closure -> do
       matches <- applyPredicate closure pat
       if matches
-        then return $ VBool True
+        then return $ VBoolean True
         else anyInElements (PatternCore.elements pat) closure
     _ -> throwError $ TypeMismatch 
            "pattern-any? expects closure as predicate" predVal
@@ -470,21 +606,21 @@ evalPatternAny pat predVal = do
               extendedEnv = Map.union bindings capturedEnv
           result <- local (const extendedEnv) (eval bodyExpr)
           case result of
-            VBool b -> return b
+            VBoolean b -> return b
             _ -> throwError $ TypeMismatch 
                    "predicate must return boolean" result
         _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
     
     anyInElements :: [Pattern Subject] -> Closure -> EvalM Value
-    anyInElements [] _ = return $ VBool False
+    anyInElements [] _ = return $ VBoolean False
     anyInElements (p:ps) closure = do
       matches <- applyPredicate closure p
       if matches
-        then return $ VBool True
+        then return $ VBoolean True
         else do
           nestedResult <- anyInElements (PatternCore.elements p) closure
           case nestedResult of
-            VBool True -> return $ VBool True
+            VBoolean True -> return $ VBoolean True
             _ -> anyInElements ps closure
 
 -- | Checks if all subpatterns match a predicate closure
@@ -494,7 +630,7 @@ evalPatternAll pat predVal = do
     VClosure closure -> do
       matches <- applyPredicate closure pat
       if not matches
-        then return $ VBool False
+        then return $ VBoolean False
         else allInElements (PatternCore.elements pat) closure
     _ -> throwError $ TypeMismatch 
            "pattern-all? expects closure as predicate" predVal
@@ -509,21 +645,21 @@ evalPatternAll pat predVal = do
               extendedEnv = Map.union bindings capturedEnv
           result <- local (const extendedEnv) (eval bodyExpr)
           case result of
-            VBool b -> return b
+            VBoolean b -> return b
             _ -> throwError $ TypeMismatch 
                    "predicate must return boolean" result
         _ -> throwError $ ArityMismatch "predicate" 1 (length paramNames)
     
     allInElements :: [Pattern Subject] -> Closure -> EvalM Value
-    allInElements [] _ = return $ VBool True
+    allInElements [] _ = return $ VBoolean True
     allInElements (p:ps) closure = do
       matches <- applyPredicate closure p
       if not matches
-        then return $ VBool False
+        then return $ VBoolean False
         else do
           nestedResult <- allInElements (PatternCore.elements p) closure
           case nestedResult of
-            VBool False -> return $ VBool False
+            VBoolean False -> return $ VBoolean False
             _ -> allInElements ps closure
 
 -- | Evaluate a quoted expression (convert Expr to Value)
@@ -532,32 +668,47 @@ evalQuote expr = exprToValue expr
 
 -- | Convert an Expr to a Value (for quote evaluation)
 exprToValue :: Expr -> EvalM Value
-exprToValue (Atom (Number n)) = return $ VNumber n
+exprToValue (Atom (Number n)) = return $ VInteger n
 exprToValue (Atom (String s)) = return $ VString s
-exprToValue (Atom (Bool b)) = return $ VBool b
+exprToValue (Atom (Bool b)) = return $ VBoolean b
 exprToValue (Atom (Keyword name)) = return $ VKeyword name
-exprToValue (Atom (Symbol name)) = return $ VString (T.pack name)
+exprToValue (Atom (Symbol name)) = return $ VString name
+exprToValue (ArrayLiteral exprs) = do
+  vals <- mapM exprToValue exprs
+  return $ VArray vals
 exprToValue (List exprs) = do
   vals <- mapM exprToValue exprs
-  return $ VList vals
+  return $ VArray vals
 exprToValue (SetLiteral exprs) = do
   vals <- mapM exprToValue exprs
   return $ VSet (Set.fromList vals)
-exprToValue (MapLiteral pairs) = do
-  -- Process pairs: [key, value, key, value, ...]
+exprToValue (RecordLiteral pairs) = do
+  -- Process pairs: [(String, Expr), ...]
   -- Process left-to-right so that later keys overwrite earlier ones
-  let processPairs :: Map.Map MapKey Value -> [Expr] -> EvalM (Map.Map MapKey Value)
+  -- Support Unquote (evaluate expression) and UnquoteSplice (evaluate to record and merge)
+  let processPairs :: Map.Map String Value -> [(String, Expr)] -> EvalM (Map.Map String Value)
       processPairs acc [] = return acc
-      processPairs acc (k:v:rest) = do
-        keyVal <- exprToValue k
-        valVal <- exprToValue v
-        case valueToMapKey keyVal of
-          Right mapKey -> processPairs (Map.insert mapKey valVal acc) rest
-          Left err -> throwError err
-      processPairs _ _ = throwError $ ParseError "Map literal must have even number of elements (key-value pairs)"
+      processPairs acc ((keyStr, valExpr):rest) = do
+        case valExpr of
+          UnquoteSplice expr -> do
+            -- Splice: evaluate to record and merge its entries (ignore keyStr)
+            recordVal <- eval expr  -- Use eval, not exprToValue, to evaluate the expression
+            case recordVal of
+              VMap spliceMap -> processPairs (Map.union spliceMap acc) rest  -- Merge entries (spliceMap takes precedence)
+              _ -> throwError $ TypeMismatch ("record splice expects record, but got: " ++ show recordVal) recordVal
+          Unquote expr -> do
+            -- Unquote: evaluate expression and use as value
+            valVal <- eval expr  -- Use eval, not exprToValue, to evaluate the expression
+            processPairs (Map.insert keyStr valVal acc) rest
+          _ -> do
+            -- Normal: convert to value (recursive quote evaluation)
+            valVal <- exprToValue valExpr
+            processPairs (Map.insert keyStr valVal acc) rest
   m <- processPairs Map.empty pairs
   return $ VMap m
 exprToValue (Quote expr) = exprToValue expr
+exprToValue (Unquote expr) = eval expr  -- In quasiquotation context, evaluate unquotes
+exprToValue (UnquoteSplice expr) = eval expr  -- In quasiquotation context, evaluate splices (but should be handled in RecordLiteral)
 
 -- | Evaluate lambda form: (lambda (params...) body)
 evalLambda :: [Expr] -> EvalM Value
@@ -580,8 +731,8 @@ evalIf :: [Expr] -> EvalM Value
 evalIf [condition, thenExpr, elseExpr] = do
   condVal <- eval condition
   case condVal of
-    VBool True -> eval thenExpr
-    VBool False -> eval elseExpr
+    VBoolean True -> eval thenExpr
+    VBoolean False -> eval elseExpr
     _ -> throwError $ TypeMismatch 
       ("if condition must be boolean, but got: " ++ show condVal) condVal
 evalIf args = throwError $ ParseError 
@@ -648,19 +799,19 @@ evalDefine [Atom (Symbol name), valueExpr] = do
   -- Update environment for subsequent expressions
   local (const newEnv) $ do
     -- Return the name as a string value
-    return $ VString (T.pack name)
+    return $ VString name
 evalDefine args = throwError $ ParseError 
   ("define requires name and value (2 arguments), but got " ++ 
    show (length args) ++ " argument(s)")
 
 -- | Helper: expect a number value, providing context in error message
 expectNumber :: Value -> EvalM Integer
-expectNumber (VNumber n) = return n
+expectNumber (VInteger n) = return n
 expectNumber v = throwError $ TypeMismatch 
   ("Expected number, but got: " ++ show v) v
 
 -- | Helper: expect a string value, providing context in error message
-expectString :: Value -> EvalM T.Text
+expectString :: Value -> EvalM String
 expectString (VString s) = return s
 expectString v = throwError $ TypeMismatch 
   ("Expected string, but got: " ++ show v) v

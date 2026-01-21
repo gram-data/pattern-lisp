@@ -39,7 +39,7 @@ spec = describe "Example Programs" $ do
             ]
       case evaluateProgram program initialEnv of
         Left err -> fail $ "Evaluation error: " ++ show err
-        Right (val, _) -> val `shouldBe` VNumber 16
+        Right (val, _) -> val `shouldBe` VInteger 16
   
   describe "List operations example" $ do
     it "evaluates list operations program correctly" $ do
@@ -55,6 +55,6 @@ spec = describe "Example Programs" $ do
         Left err -> fail $ "Evaluation error: " ++ show err
         Right (val, _) -> 
           case val of
-            VList [VNumber 1, VNumber 2, VNumber 3] -> True `shouldBe` True
-            _ -> fail $ "Expected VList [VNumber 1, VNumber 2, VNumber 3], got " ++ show val
+            VArray [VInteger 1, VInteger 2, VInteger 3] -> True `shouldBe` True
+            _ -> fail $ "Expected VArray [VInteger 1, VInteger 2, VInteger 3], got " ++ show val
 

@@ -62,8 +62,8 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
           length (PatternCore.elements pat') `shouldBe` 2
   
   describe "valueToPatternSubject" $ do
-    it "maps VNumber to Pattern Subject" $ do
-      let val = VNumber 42
+    it "maps VInteger to Pattern Subject" $ do
+      let val = VInteger 42
           env = initialEnv
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err
@@ -72,7 +72,7 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
           "Number" `Set.member` labels subj `shouldBe` True
     
     it "maps VString to Pattern Subject" $ do
-      let val = VString (T.pack "hello")
+      let val = VString ( "hello")
           env = initialEnv
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err
@@ -80,8 +80,8 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
           let subj = PatternCore.value pat
           "String" `Set.member` labels subj `shouldBe` True
     
-    it "maps VBool to Pattern Subject" $ do
-      let val = VBool True
+    it "maps VBoolean to Pattern Subject" $ do
+      let val = VBoolean True
           env = initialEnv
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err
@@ -89,8 +89,8 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
           let subj = PatternCore.value pat
           "Bool" `Set.member` labels subj `shouldBe` True
     
-    it "maps VList to Pattern Subject with elements" $ do
-      let val = VList [VNumber 1, VNumber 2, VNumber 3]
+    it "maps VArray to Pattern Subject with elements" $ do
+      let val = VArray [VInteger 1, VInteger 2, VInteger 3]
           env = initialEnv
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err
@@ -99,8 +99,8 @@ spec = describe "PatternLisp.Gram - Gram Serialization" $ do
           "List" `Set.member` labels subj `shouldBe` True
           length (PatternCore.elements pat) `shouldBe` 3
     
-    it "maps empty VList to atomic Pattern Subject" $ do
-      let val = VList []
+    it "maps empty VArray to atomic Pattern Subject" $ do
+      let val = VArray []
           env = initialEnv
       case runExcept $ runReaderT (valueToPatternSubject val) env of
         Left err -> fail $ "Error: " ++ show err

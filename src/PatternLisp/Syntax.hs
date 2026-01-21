@@ -19,8 +19,6 @@ module PatternLisp.Syntax
   ( Expr(..)
   , Atom(..)
   , Value(..)
-  , KeywordKey(..)
-  , MapKey(..)
   , Closure(..)
   , Primitive(..)
   , Env
@@ -31,99 +29,118 @@ module PatternLisp.Syntax
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Data.Text (Text)
 import Subject.Core (Subject)
 import Pattern (Pattern)
+import qualified Subject.Value as SubjectValue
 
 -- | Abstract syntax tree representation of Lisp expressions
 data Expr
   = Atom Atom          -- ^ Symbols, numbers, strings, booleans
   | List [Expr]        -- ^ S-expressions (function calls, special forms)
+  | ArrayLiteral [Expr]  -- ^ Array literals [...] (gram-compatible, comma-separated)
   | SetLiteral [Expr]  -- ^ Set literals #{...}
-  | MapLiteral [Expr]  -- ^ Map literals {key: value ...} (alternating key-value pairs)
+  | RecordLiteral [(String, Expr)]  -- ^ Record literals {key: value, ...} (comma-separated, gram-compatible)
   | Quote Expr         -- ^ Quoted expressions (prevent evaluation)
+  | Unquote Expr       -- ^ Unquote marker for quasiquotation (`,expr)
+  | UnquoteSplice Expr -- ^ Unquote-splice marker for quasiquotation (`,@expr)
   deriving (Eq, Show)
 
 -- | Atomic values in the AST
 data Atom
   = Symbol String      -- ^ Variable names, function names
   | Number Integer     -- ^ Integer literals
-  | String Text        -- ^ String literals
-  | Bool Bool          -- ^ Boolean literals (#t, #f)
+  | String String      -- ^ String literals (gram uses String, not Text)
+  | Bool Bool          -- ^ Boolean literals (true/false, gram-compatible)
   | Keyword String     -- ^ Keywords with postfix colon syntax (name:)
   deriving (Eq, Show)
 
--- | Keyword type for map keys (newtype wrapper for type safety)
-newtype KeywordKey = KeywordKey String
-  deriving (Eq, Ord, Show)
-
--- | Map key type: can be either a keyword or a string
--- Keywords are convenient (Clojure-like), strings are flexible (JSON-like)
-data MapKey = KeyKeyword KeywordKey  -- ^ Keyword key (name:)
-            | KeyString String       -- ^ String key ("name")
-  deriving (Eq, Show)
-
--- | Ord instance for MapKey: keywords sort before strings, then by value
-instance Ord MapKey where
-  compare (KeyKeyword (KeywordKey k1)) (KeyKeyword (KeywordKey k2)) = compare k1 k2
-  compare (KeyString s1) (KeyString s2) = compare s1 s2
-  compare (KeyKeyword _) (KeyString _) = LT  -- Keywords sort before strings
-  compare (KeyString _) (KeyKeyword _) = GT
-
 -- | Runtime values that expressions evaluate to
+-- Uses gram Subject.Value types for basic values (Option B - gram types throughout)
+-- Pattern-lisp specific types (VPattern, VClosure, VPrimitive) are kept as separate constructors
 data Value
-  = VNumber Integer           -- ^ Numeric values
-  | VString Text              -- ^ String values
-  | VBool Bool                -- ^ Boolean values
-  | VKeyword String           -- ^ Keyword values (self-evaluating)
-  | VMap (Map.Map MapKey Value)  -- ^ Map values with keyword or string keys
-  | VSet (Set.Set Value)      -- ^ Set values (unordered, unique elements)
-  | VList [Value]             -- ^ List values
-  | VPattern (Pattern Subject)  -- ^ Pattern values with Subject decoration
-  | VClosure Closure          -- ^ Function closures
-  | VPrimitive Primitive       -- ^ Built-in primitive functions
+  = VInteger Integer           -- ^ Integer values (gram VInteger)
+  | VDecimal Double            -- ^ Decimal values (gram VDecimal)
+  | VBoolean Bool             -- ^ Boolean values (gram VBoolean)
+  | VString String            -- ^ String values (gram VString, was Text)
+  | VSymbol String            -- ^ Symbol values (gram VSymbol)
+  | VTaggedString String String  -- ^ Tagged string values (gram VTaggedString)
+  | VArray [Value]            -- ^ Array values (gram VArray, replaces VList)
+  | VMap (Map.Map String Value)  -- ^ Map values with string keys (gram VMap, replaces VMap with MapKey)
+  | VRange SubjectValue.RangeValue  -- ^ Range values (gram VRange)
+  | VMeasurement String Double  -- ^ Measurement values (gram VMeasurement)
+  | VKeyword String           -- ^ Keyword values (pattern-lisp specific, serializes as VTaggedString)
+  | VSet (Set.Set Value)      -- ^ Set values (pattern-lisp specific, serializes as VArray)
+  | VPattern (Pattern Subject)  -- ^ Pattern values (pattern-lisp specific)
+  | VClosure Closure          -- ^ Function closures (pattern-lisp specific)
+  | VPrimitive Primitive       -- ^ Built-in primitive functions (pattern-lisp specific)
   deriving (Eq, Show)
 
 -- | Ord instance for Value (needed for Set operations)
 -- Uses tag-based ordering: compares constructor tags first, then values
 instance Ord Value where
-  compare (VNumber a) (VNumber b) = compare a b
-  compare (VNumber _) _ = LT
-  compare _ (VNumber _) = GT
+  compare (VInteger a) (VInteger b) = compare a b
+  compare (VInteger _) _ = LT
+  compare _ (VInteger _) = GT
+  
+  compare (VDecimal a) (VDecimal b) = compare a b
+  compare (VDecimal _) _ = LT
+  compare _ (VDecimal _) = GT
+  
+  compare (VBoolean a) (VBoolean b) = compare a b
+  compare (VBoolean _) _ = LT
+  compare _ (VBoolean _) = GT
   
   compare (VString a) (VString b) = compare a b
   compare (VString _) _ = LT
   compare _ (VString _) = GT
   
-  compare (VBool a) (VBool b) = compare a b
-  compare (VBool _) _ = LT
-  compare _ (VBool _) = GT
+  compare (VSymbol a) (VSymbol b) = compare a b
+  compare (VSymbol _) _ = LT
+  compare _ (VSymbol _) = GT
   
-  compare (VKeyword a) (VKeyword b) = compare a b
-  compare (VKeyword _) _ = LT
-  compare _ (VKeyword _) = GT
+  compare (VTaggedString tag1 c1) (VTaggedString tag2 c2) = 
+    case compare tag1 tag2 of
+      EQ -> compare c1 c2
+      x -> x
+  compare (VTaggedString _ _) _ = LT
+  compare _ (VTaggedString _ _) = GT
+  
+  compare (VArray a) (VArray b) = compare a b
+  compare (VArray _) _ = LT
+  compare _ (VArray _) = GT
   
   compare (VMap a) (VMap b) = compare (Map.toAscList a) (Map.toAscList b)
   compare (VMap _) _ = LT
   compare _ (VMap _) = GT
   
+  compare (VRange a) (VRange b) = compare a b
+  compare (VRange _) _ = LT
+  compare _ (VRange _) = GT
+  
+  compare (VMeasurement u1 v1) (VMeasurement u2 v2) =
+    case compare u1 u2 of
+      EQ -> compare v1 v2
+      x -> x
+  compare (VMeasurement _ _) _ = LT
+  compare _ (VMeasurement _ _) = GT
+  
+  compare (VKeyword a) (VKeyword b) = compare a b
+  compare (VKeyword _) _ = LT
+  compare _ (VKeyword _) = GT
+  
   compare (VSet a) (VSet b) = compare (Set.toList a) (Set.toList b)
   compare (VSet _) _ = LT
   compare _ (VSet _) = GT
   
-  compare (VList a) (VList b) = compare a b
-  compare (VList _) _ = LT
-  compare _ (VList _) = GT
-  
   compare (VPattern p1) (VPattern p2)
-    | VPattern p1 == VPattern p2 = EQ  -- If equal, return EQ (Ord contract)
-    | otherwise = compare (show p1) (show p2)  -- Otherwise, consistent ordering by Show
+    | VPattern p1 == VPattern p2 = EQ
+    | otherwise = compare (show p1) (show p2)
   compare (VPattern _) _ = LT
   compare _ (VPattern _) = GT
   
   compare (VClosure c1) (VClosure c2)
-    | VClosure c1 == VClosure c2 = EQ  -- If equal, return EQ (Ord contract)
-    | otherwise = compare (show c1) (show c2)  -- Otherwise, consistent ordering by Show
+    | VClosure c1 == VClosure c2 = EQ
+    | otherwise = compare (show c1) (show c2)
   compare (VClosure _) _ = LT
   compare _ (VClosure _) = GT
   
@@ -169,13 +186,20 @@ data Primitive
   | SetEqual          -- ^ (set-equal? set1 set2): check if sets are equal
   | SetEmpty          -- ^ (empty? set): check if set is empty
   | HashSet           -- ^ (hash-set ...): create set from arguments
-  -- Map operations
-  | MapGet            -- ^ (get map key [default]): get value at key, return default or nil if not found
-  | MapGetIn          -- ^ (get-in map [key1 key2 ...]): nested access via keyword path
-  | MapAssoc          -- ^ (assoc map key value): add/update key-value pair
-  | MapDissoc         -- ^ (dissoc map key): remove key from map
-  | MapUpdate         -- ^ (update map key f): apply function to value at key, create with f(nil) if missing
-  | HashMap           -- ^ (hash-map key1 val1 key2 val2 ...): create map from alternating keyword-value pairs
+  | Record            -- ^ (record key1 val1 key2 val2 ...): create record from alternating keyword-value pairs
+  -- Record operations
+  | RecordType        -- ^ (record? value): type predicate for records
+  | RecordGet         -- ^ (get record key [default]): get value from record by key
+  | RecordHas         -- ^ (has? record key): check if record contains key
+  | RecordKeys        -- ^ (keys record): get all keys from record as list
+  | RecordValues      -- ^ (values record): get all values from record as list
+  | RecordToAlist     -- ^ (record->alist record): convert record to association list
+  | AlistToRecord     -- ^ (alist->record alist): convert association list to record
+  | RecordSet         -- ^ (assoc record key value): add/update key-value pair (returns new record)
+  | RecordRemove      -- ^ (dissoc record key): remove key from record (returns new record)
+  | RecordMerge       -- ^ (merge record1 record2): merge two records (right takes precedence)
+  | RecordMap         -- ^ (map function record): map function over record values
+  | RecordFilter      -- ^ (filter predicate record): filter record entries by predicate
   deriving (Eq, Show, Ord)
 
 -- | Environment mapping variable names to values
@@ -225,12 +249,19 @@ primitiveName SetSubset = "set-subset?"
 primitiveName SetEqual = "set-equal?"
 primitiveName SetEmpty = "empty?"
 primitiveName HashSet = "hash-set"
-primitiveName MapGet = "get"
-primitiveName MapGetIn = "get-in"
-primitiveName MapAssoc = "assoc"
-primitiveName MapDissoc = "dissoc"
-primitiveName MapUpdate = "update"
-primitiveName HashMap = "hash-map"
+primitiveName Record = "record"
+primitiveName RecordType = "record?"
+primitiveName RecordGet = "get"
+primitiveName RecordHas = "has?"
+primitiveName RecordKeys = "keys"
+primitiveName RecordValues = "values"
+primitiveName RecordToAlist = "record->alist"
+primitiveName AlistToRecord = "alist->record"
+primitiveName RecordSet = "assoc"
+primitiveName RecordRemove = "dissoc"
+primitiveName RecordMerge = "merge"
+primitiveName RecordMap = "map"
+primitiveName RecordFilter = "filter"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -265,13 +296,21 @@ primitiveFromName "set-difference" = Just SetDifference
 primitiveFromName "set-symmetric-difference" = Just SetSymmetricDifference
 primitiveFromName "set-subset?" = Just SetSubset
 primitiveFromName "set-equal?" = Just SetEqual
-primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and maps
+primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and records
 primitiveFromName "hash-set" = Just HashSet
-primitiveFromName "get" = Just MapGet
-primitiveFromName "get-in" = Just MapGetIn
-primitiveFromName "assoc" = Just MapAssoc
-primitiveFromName "dissoc" = Just MapDissoc
-primitiveFromName "update" = Just MapUpdate
-primitiveFromName "hash-map" = Just HashMap
+primitiveFromName "record" = Just Record
+primitiveFromName "hash-map" = Just Record  -- Backward compatibility alias (deprecated)
+primitiveFromName "record?" = Just RecordType
+primitiveFromName "get" = Just RecordGet
+primitiveFromName "has?" = Just RecordHas
+primitiveFromName "keys" = Just RecordKeys
+primitiveFromName "values" = Just RecordValues
+primitiveFromName "record->alist" = Just RecordToAlist
+primitiveFromName "alist->record" = Just AlistToRecord
+primitiveFromName "assoc" = Just RecordSet
+primitiveFromName "dissoc" = Just RecordRemove
+primitiveFromName "merge" = Just RecordMerge
+primitiveFromName "map" = Just RecordMap
+primitiveFromName "filter" = Just RecordFilter
 primitiveFromName _ = Nothing
 

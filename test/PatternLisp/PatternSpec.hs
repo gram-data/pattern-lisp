@@ -34,7 +34,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VString (T.pack "hello")
+          Right val -> val `shouldBe` VString ( "hello")
     
     it "pattern-elements returns list of VPattern elements" $ do
       case parseExpr "(pattern-elements (pattern \"root\" '()))" of
@@ -42,7 +42,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> case val of
-            VList [] -> True `shouldBe` True
+            VArray [] -> True `shouldBe` True
             _ -> fail $ "Expected empty list, got: " ++ show val
     
     it "pattern-length returns correct direct element count" $ do
@@ -50,21 +50,21 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 0
+          Right val -> val `shouldBe` VInteger 0
     
     it "pattern-size counts all nodes recursively" $ do
       case parseExpr "(pattern-size (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 1
+          Right val -> val `shouldBe` VInteger 1
     
     it "pattern-depth returns max depth correctly" $ do
       case parseExpr "(pattern-depth (pure \"hello\"))" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 0
+          Right val -> val `shouldBe` VInteger 0
     
     it "pattern-values flattens all values" $ do
       case parseExpr "(pattern-values (pure \"hello\"))" of
@@ -72,7 +72,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> case val of
-            VList [VString s] -> s `shouldBe` T.pack "hello"
+            VArray [VString s] -> s `shouldBe`  "hello"
             _ -> fail $ "Expected list with one string, got: " ++ show val
     
     it "nested patterns work correctly" $ do
@@ -129,7 +129,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> case val of
-            VList [] -> True `shouldBe` True  -- Returns empty list if no match
+            VArray [] -> True `shouldBe` True  -- Returns empty list if no match
             _ -> fail $ "Expected empty list, got: " ++ show val
     
     it "pattern-any? checks existence correctly" $ do
@@ -138,7 +138,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VBool True
+          Right val -> val `shouldBe` VBoolean True
     
     it "pattern-all? checks universal property correctly" $ do
       -- Test pattern-all? on atomic pattern
@@ -146,7 +146,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VBool True
+          Right val -> val `shouldBe` VBoolean True
     
     it "pattern predicates work with closures" $ do
       -- Test that predicates can be closures with captured environment
@@ -155,7 +155,7 @@ spec = describe "PatternLisp.Pattern - Pattern as First-Class Value" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VBool True
+          Right val -> val `shouldBe` VBoolean True
     
     it "pattern-find type error for non-closure predicate" $ do
       case parseExpr "(pattern-find (pure 1) \"not-a-closure\")" of

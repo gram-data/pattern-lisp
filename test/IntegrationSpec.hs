@@ -16,21 +16,21 @@ spec = describe "Integration Tests" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 6
+          Right val -> val `shouldBe` VInteger 6
     
     it "parses and evaluates nested expression" $ do
       case parseExpr "(+ (* 2 3) 4)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 10
+          Right val -> val `shouldBe` VInteger 10
     
     it "parses and evaluates conditional" $ do
       case parseExpr "(if (> 5 3) 10 20)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> val `shouldBe` VNumber 10
+          Right val -> val `shouldBe` VInteger 10
   
   describe "Define and use functions" $ do
     it "defines function and uses it in same evaluation" $ do
@@ -39,7 +39,7 @@ spec = describe "Integration Tests" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExprWithEnv expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right (val, _) -> val `shouldBe` VNumber 16
+          Right (val, _) -> val `shouldBe` VInteger 16
     
     it "defines multiple functions and uses them" $ do
       let program = unlines
@@ -52,7 +52,7 @@ spec = describe "Integration Tests" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExprWithEnv expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right (val, _) -> val `shouldBe` VNumber 26
+          Right (val, _) -> val `shouldBe` VInteger 26
   
   describe "Closure environment capture" $ do
     it "creates closure that captures outer environment" $ do
@@ -61,7 +61,7 @@ spec = describe "Integration Tests" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExprWithEnv expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right (val, _) -> val `shouldBe` VNumber 10
+          Right (val, _) -> val `shouldBe` VInteger 10
     
     it "creates higher-order function with closure" $ do
       let program = unlines
@@ -74,7 +74,7 @@ spec = describe "Integration Tests" $ do
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExprWithEnv expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right (val, _) -> val `shouldBe` VNumber 15
+          Right (val, _) -> val `shouldBe` VInteger 15
   
   describe "Error handling across components" $ do
     it "reports parse errors with position" $ do

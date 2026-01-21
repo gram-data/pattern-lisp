@@ -2,7 +2,7 @@
 
 **Status: Partially Implemented - Design Document v0.1**
 
-This document describes syntax conventions for Pattern Lisp. Keywords, maps, and sets are **now implemented** (as of 2025-01-27). Prefix colon syntax for labels is optional and deferred.
+This document describes syntax conventions for Pattern Lisp. Keywords, records, and sets are **now implemented** (as of 2025-01-30). Prefix colon syntax for labels is optional and deferred.
 
 ### Overview
 
@@ -224,45 +224,80 @@ The parsing is unambiguous because context determines interpretation:
 
 ---
 
-## Maps
+## Records
 
-Maps use keywords as keys with the postfix syntax:
+Records are immutable key-value structures using gram-compatible notation. Records replaced the previous map syntax and use comma-separated key-value pairs:
 
 ```lisp
-;; Map literal
-{name: "Alice" age: 30 active: true}
+;; Record literal (comma-separated)
+{name: "Alice", age: 30, active: true}
 
-;; Nested maps
-{user: {name: "Alice" email: "alice@example.com"}
- settings: {theme: "dark" notifications: true}}
+;; Nested records
+{user: {name: "Alice", email: "alice@example.com"},
+ settings: {theme: "dark", notifications: true}}
 
 ;; Access
-(get user name:)                    ;; => "Alice"
-(get-in data [user: name:])         ;; => "Alice" (path is list of keywords)
+(get {name: "Alice", age: 30} "name")        ;; => "Alice"
+(get {name: "Alice"} "email" "unknown")     ;; => "unknown" (default)
 ```
 
-### Map Operations
+### Key Syntax
+
+Keys can be identifiers or quoted strings:
+
+```lisp
+{name: "Alice"}                    ;; identifier key
+{"user-id": 123}                   ;; quoted string key
+{name: "Alice", "user-id": 123}    ;; mixed keys
+```
+
+Both single (`:`) and double (`::`) colons are supported for gram compatibility:
+- `{name: "Alice"}` - single colon
+- `{name:: "Alice"}` - double colon (gram-compatible)
+
+### Record Operations
 
 ```lisp
 ;; Construction
-{a: 1 b: 2}               ;; literal
-(hash-map a: 1 b: 2)      ;; function
+{name: "Alice", age: 30}           ;; literal
+(record "name" "Alice" "age" 30)   ;; constructor function
 
 ;; Access
-(get m key:)              ;; get with default nil
-(get m key: default)      ;; get with explicit default
+(get record "key")                 ;; get value
+(get record "key" default)         ;; get with default
+(has? record "key")                ;; check if key exists
+(keys record)                      ;; get all keys
+(values record)                   ;; get all values
 
-;; Update
-(assoc m key: value)      ;; add/update key
-(dissoc m key:)           ;; remove key
-(update m key: f)         ;; apply f to value at key
+;; Modification (returns new record)
+(assoc record "key" value)         ;; add/update key
+(dissoc record "key")              ;; remove key
+(merge record1 record2)            ;; merge records
 
-;; Predicates
-(contains? m key:)        ;; key present?
-(empty? m)                ;; no keys?
+;; Transformation
+(map fn record)                    ;; map over entries
+(filter pred record)               ;; filter entries
+
+;; Conversion
+(record->alist record)             ;; convert to association list
+(alist->record pairs)              ;; convert from association list
 ```
 
-**Note**: Maps use keywords as keys (postfix colon syntax). The `hash-map` function provides explicit construction when building maps programmatically, while `{...}` is a literal syntax for read-time construction.
+### Quasiquotation
+
+Records support unquoting and splicing for dynamic construction:
+
+```lisp
+;; Unquoting values
+(let ((name "Alice"))
+  `{name: ,name, age: 30})
+
+;; Splicing records
+(let ((base {role: "Engineer"}))
+  `{name: "Alice", ,@base})
+```
+
+**Note**: Records use gram-compatible syntax with comma-separated pairs. Keys are strings (from identifiers or quoted strings). The `record` function provides explicit construction when building records programmatically, while `{...}` is a literal syntax for read-time construction. Records are gram-compatible and can be copied directly from `.gram` files.
 
 ---
 
@@ -340,7 +375,7 @@ labels                              ;; => set
 (set-equal? s1 s2)                  ;; sets contain same elements?
 ```
 
-### Sets vs Lists vs Maps
+### Sets vs Lists vs Records
 
 | Aspect | List | Map | Set |
 |--------|------|-----|-----|
@@ -475,16 +510,18 @@ Postfix keywords resolve this elegantly:
 1. **Clojure convention**: `#{}` is widely recognized as set notation
 2. **Visual distinction**: 
    - `()` = lists (ordered sequences)
-   - `{}` = maps (key-value pairs)
+   - `{}` = records (key-value pairs, comma-separated)
    - `#{}` = sets (unordered, unique)
 3. **Subject labels alignment**: Subject labels are `Set String`, so `#{:Person :Employee}` naturally represents a set of labels
 4. **Unambiguous**: Clearly communicates set semantics (unordered, unique) vs. list semantics (ordered, duplicates allowed)
 5. **Constructor functions**: `hash-map` and `hash-set` provide explicit construction when needed (e.g., programmatic construction)
 
-### Why hash-map and hash-set Functions?
+### Why record and hash-set Functions?
 
 Following Clojure convention:
 - **Literals** (`{...}`, `#{...}`): Read-time construction, more efficient
-- **Constructors** (`hash-map`, `hash-set`): Runtime construction, useful for programmatic building
+- **Constructors** (`record`, `hash-set`): Runtime construction, useful for programmatic building
 
 Both create the same data structure, but literals are preferred when the structure is known at read time.
+
+**Note**: `hash-map` is deprecated and aliased to `record` for backward compatibility. Use `record` for new code.

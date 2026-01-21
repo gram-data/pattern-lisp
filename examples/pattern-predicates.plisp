@@ -18,12 +18,12 @@
 (define found (pattern-find p2 (lambda (p) (= (pattern-value p) 20))))
 
 ;; pattern-any?: Check if any subpattern matches the predicate
-;; Returns #t if any match found, #f otherwise
+;; Returns true if any match found, false otherwise
 (define has-twenty (pattern-any? p2 (lambda (p) (= (pattern-value p) 20))))
 
 ;; pattern-all?: Check if all subpatterns match the predicate
 ;; For atomic patterns, checks the pattern itself
-;; Returns #t if all match, #f otherwise
+;; Returns true if all match, false otherwise
 (define all-match (pattern-all? p2 (lambda (p) (= (pattern-value p) 20))))
 
 ;; Example: Find pattern that doesn't exist (returns empty list)
@@ -65,7 +65,7 @@
 ;; (pattern-find p1 "not-a-closure")
 
 ;; Arity error - predicate must take exactly one parameter
-;; (pattern-find p1 (lambda () #t))
+;; (pattern-find p1 (lambda () true))
 
 ;; Type error - predicate must return boolean
 ;; (pattern-find p1 (lambda (p) 42))
