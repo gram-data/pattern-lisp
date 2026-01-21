@@ -13,6 +13,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-19
 - N/A (in-memory pattern structures) (006-gram-hs-migration)
 - Haskell (GHC 9.10.3, base >=4.18 && <5) + gram-hs library (gram, pattern, subject packages), Megaparsec (parsing), Data.Map.Strict (record representation), Cabal build system (007-inline-record-notation)
 - N/A (in-memory record structures) (007-inline-record-notation)
+- Haskell (GHC 4.18+), Cabal 3.x + megaparsec, mtl, gram, pattern, subject, filepath (existing) (008-plisp-gram-convert)
+- File I/O only (read plisp/gram, write gram/plisp) (008-plisp-gram-convert)
 
 - Haskell with GHC 9.6.3 (see research.md for version selection rationale) + gram-hs (source repository from GitHub), text, containers, megaparsec, mtl, hspec, QuickCheck (001-pattern-lisp-init)
 
@@ -33,9 +35,9 @@ tests/
 Haskell with GHC 9.6.3 (see research.md for version selection rationale): Follow standard conventions
 
 ## Recent Changes
+- 008-plisp-gram-convert: Added Haskell (GHC 4.18+), Cabal 3.x + megaparsec, mtl, gram, pattern, subject, filepath (existing)
 - 007-inline-record-notation: Added Haskell (GHC 9.10.3, base >=4.18 && <5) + gram-hs library (gram, pattern, subject packages), Megaparsec (parsing), Data.Map.Strict (record representation), Cabal build system
 - 006-gram-hs-migration: Added Haskell (GHC 9.10.3, base >=4.18 && <5) + gram-hs library (pattern, subject, gram packages), Cabal build system
-- 005-keywords-maps-sets: Added Haskell (GHC 9.10.3)
 
 
 <!-- MANUAL ADDITIONS START -->
