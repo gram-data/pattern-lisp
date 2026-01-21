@@ -1504,12 +1504,12 @@ programToGram values _runtimeEnv =
       -- Serialize each value as a pattern
       valuePatterns = map valueToPatternSubjectForGram values
       -- Combine file metadata with value patterns
-      -- Gram files are sequences of patterns, so we serialize them separately
-      metadataGram = toGram fileMetadata
-      valueGrams = map toGram valuePatterns
-  in unlines (metadataGram : valueGrams)
+      -- toGram accepts [Pattern Subject] and produces newline-separated output
+  in toGram (fileMetadata : valuePatterns)
 
 -- | Deserializes Gram notation to a program (list of values and environment).
+-- Follows the gram document model: one document → fromGram → [Pattern];
+-- first pattern is the header (require kind: "Pattern Lisp"); rest are value patterns.
 -- Expects format:
 --   { kind: "Pattern Lisp" }
 --   expr1
@@ -1518,28 +1518,17 @@ programToGram values _runtimeEnv =
 -- Note: No separate Environment section - scopes are inlined in :Scope patterns
 gramToProgram :: String -> Either Error ([Value], Env)
 gramToProgram gramText = do
-  -- Split by lines and parse each pattern
-  let lines' = filter (not . null) $ map (dropWhile (== ' ')) $ lines gramText
-  case lines' of
+  patterns <- case fromGram gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right ps -> Right ps
+  case patterns of
     [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
-    (metadataLine : valueLines) -> do
-      -- Parse first pattern as file metadata
-      metadataPat <- case fromGram metadataLine of
-        Left parseErr -> Left $ ParseError (show parseErr)
-        Right p -> Right p
-      -- Verify it's the file metadata (has kind property)
-      let metadataSubj = PatternCore.value metadataPat
-          kindProp = Map.lookup "kind" (properties metadataSubj)
+    (headerPat : valuePats) -> do
+      let headerSubj = PatternCore.value headerPat
+          kindProp = Map.lookup "kind" (properties headerSubj)
       case kindProp of
         Just (SubjectValue.VString "Pattern Lisp") -> do
-          -- Parse remaining patterns as expressions
-          valuePatterns <- mapM (\line -> case fromGram line of
-            Left parseErr -> Left $ ParseError (show parseErr)
-            Right p -> Right p
-            ) valueLines
-          -- Convert each pattern to a value
-          values <- mapM patternSubjectToValue valuePatterns
-          -- Return values with standard library environment
+          values <- mapM patternSubjectToValue valuePats
           Right (values, initialEnv)
         _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
 

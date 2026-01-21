@@ -25,9 +25,13 @@
 
 **Purpose**: Update to latest gram-hs, ensure build and tests pass; fix any breaking changes in Gram serialization and parsing.
 
-- [ ] T001 Update gram-hs to latest: run `cabal update`; verify or update `cabal.project` source-repository-package entries for `libs/gram`, `libs/pattern`, `libs/subject` (tag: main or a newer release tag if available); run `cabal build` in project root.
+**Logical model (gram document)**: A gram file is a **list of patterns**. The **first** may be a header-like pattern (optional root record `{k:v}`); the **rest** are content. Analogous to CSV with an optional header. `toGram [p1, p2, ...]` serializes: if `p1` is header-like → bare `{k:v}` then newline-separated content; otherwise all as `serializePattern`. `fromGram` returns `[Pattern]`; a leading bare root becomes the first (header-like) pattern. `fromGramWithHeader` yields `(Maybe (Map String V.Value), [Pattern])` with only content patterns in the list.
 
-- [ ] T002 Run `cabal test`; fix any breaking changes from gram-hs in **serialization** (`toGram`, `valueToPatternSubjectForGram`, `programToGram` in `src/PatternLisp/Codec.hs`; `patternToGram` in `src/PatternLisp/Gram.hs`) and **parsing** (`fromGram`, `gramToPattern`, `gramToProgram` in `src/PatternLisp/Codec.hs`; `Gram.Parse` in `src/PatternLisp/Gram.hs`; `Gram.Parse` in `test/PatternLisp/RecordGramCompatibilitySpec.hs`). Update `test/PatternLisp/CodecSpec.hs`, `test/PatternLisp/GramSerializationSpec.hs`, `test/Properties.hs` if their use of these functions breaks.
+- [x] T001 Update gram-hs to latest: run `cabal update`; verify or update `cabal.project` source-repository-package entries for `libs/gram`, `libs/pattern`, `libs/subject` (tag: main or a newer release tag if available); run `cabal build` in project root.
+
+- [x] T002 Run `cabal test`; fix any breaking changes from gram-hs in **serialization** (`toGram`, `valueToPatternSubjectForGram`, `programToGram` in `src/PatternLisp/Codec.hs`; `patternToGram` in `src/PatternLisp/Gram.hs`) and **parsing** (`fromGram`, `gramToPattern`, `gramToProgram` in `src/PatternLisp/Codec.hs`; `Gram.Parse` in `src/PatternLisp/Gram.hs`; `Gram.Parse` in `test/PatternLisp/RecordGramCompatibilitySpec.hs`). Update `test/PatternLisp/CodecSpec.hs`, `test/PatternLisp/GramSerializationSpec.hs`, `test/Properties.hs` if their use of these functions breaks.
+
+- [x] T002b Refactor `gramToProgram` in `src/PatternLisp/Codec.hs` to follow the gram document model: parse the **entire** input with `fromGram` (no line-splitting or per-line `fromGram`). Expect `[Pattern]`: at least one; first = header (require `kind: "Pattern Lisp"` in its subject properties); **rest** = value patterns. Run `mapM patternSubjectToValue` on the rest. Optionally consider `fromGramWithHeader` (root as `Maybe (Map ...)`, list = content only). Handle empty/whitespace → `Right []` as "Empty Gram file" (or equivalent); only-header no-values → `[]` value patterns is allowed.
 
 ---
 
@@ -161,7 +165,7 @@ cabal test --test-options='--match "Plisp.*gram"'
 
 ### MVP First (User Story 1 Only)
 
-1. Phase 1: Setup (T001–T002)—gram-hs update and breakage fixes.
+1. Phase 1: Setup (T001–T002b)—gram-hs update, breakage fixes, and gramToProgram refactor to whole-document fromGram.
 2. Phase 2: Foundational (T003–T004)—needed for US2; can be deferred if doing MVP-only, but then US2 cannot start.
 3. Phase 3: US1 (T005–T008)—plisp→gram. Stop and validate.
 4. Deploy/demo plisp→gram.
@@ -194,15 +198,15 @@ cabal test --test-options='--match "Plisp.*gram"'
 
 ## Summary
 
-| Phase        | Task IDs  | Count |
-|-------------|-----------|-------|
-| 1 Setup     | T001–T002 | 2     |
+| Phase        | Task IDs   | Count |
+|-------------|------------|-------|
+| 1 Setup     | T001–T002b | 3     |
 | 2 Foundational | T003–T004 | 2   |
 | 3 US1       | T005–T008 | 4     |
 | 4 US2       | T009–T011 | 3     |
 | 5 US3       | T012–T013 | 2     |
 | 6 Polish    | T014–T017 | 4     |
-| **Total**   |           | **17**|
+| **Total**   |           | **18**|
 
 | Story | Tasks       | Count |
 |-------|-------------|-------|

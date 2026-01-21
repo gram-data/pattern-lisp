@@ -28,21 +28,26 @@ import Pattern.Core (point)
 import qualified Pattern.Core as PatternCore
 import Subject.Core (Subject)
 import Gram.Serialize (toGram)
-import Gram.Parse (fromGram, ParseError)
+import qualified Gram.Parse as GramParse
 
 -- | Serialize Pattern Subject to gram notation string.
 --
 -- This function converts a Pattern Subject to its gram notation representation,
 -- which can be written to files, sent over networks, or piped between programs.
 patternToGram :: Pattern Subject -> String
-patternToGram = toGram
+patternToGram p = toGram [p]
 
 -- | Deserialize gram notation string to Pattern Subject.
 --
 -- This function parses gram notation text and converts it to a Pattern Subject.
 -- Returns an error if the gram notation is invalid.
-gramToPattern :: String -> Either ParseError (Pattern Subject)
-gramToPattern = fromGram
+-- fromGram returns [Pattern]; we expect exactly one for a single-line input.
+gramToPattern :: String -> Either GramParse.ParseError (Pattern Subject)
+gramToPattern s = case GramParse.fromGram s of
+  Left e -> Left e
+  Right [p] -> Right p
+  Right [] -> Left (GramParse.ParseError "expected exactly one pattern")
+  Right (_ : _ : _) -> Left (GramParse.ParseError "expected exactly one pattern")
 
 -- | Serialize an expression AST to gram notation string.
 --
