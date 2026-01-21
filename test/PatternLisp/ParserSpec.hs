@@ -51,9 +51,9 @@ spec = describe "PatternLisp.Parser" $ do
       parseExpr "my-var" `shouldBe` Right (Atom (Symbol "my-var"))
       parseExpr "var123" `shouldBe` Right (Atom (Symbol "var123"))
     
-    it "parses booleans (#t, #f)" $ do
-      parseExpr "#t" `shouldBe` Right (Atom (Bool True))
-      parseExpr "#f" `shouldBe` Right (Atom (Bool False))
+    it "parses booleans (true, false)" $ do
+      parseExpr "true" `shouldBe` Right (Atom (Bool True))
+      parseExpr "false" `shouldBe` Right (Atom (Bool False))
     
     it "parses keywords with postfix colon syntax" $ do
       parseExpr "name:" `shouldBe` Right (Atom (Keyword "name"))
@@ -63,7 +63,7 @@ spec = describe "PatternLisp.Parser" $ do
     it "parses set literals with hash set syntax" $ do
       parseExpr "#{1 2 3}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)])
       parseExpr "#{}" `shouldBe` Right (SetLiteral [])
-      parseExpr "#{1 \"hello\" #t}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String ( "hello")), Atom (Bool True)])
+      parseExpr "#{1 \"hello\" true}" `shouldBe` Right (SetLiteral [Atom (Number 1), Atom (String ( "hello")), Atom (Bool True)])
     
     it "parses record literals with curly brace syntax (comma-separated)" $ do
       parseExpr "{name: \"Alice\", age: 30}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30))])
@@ -83,8 +83,8 @@ spec = describe "PatternLisp.Parser" $ do
       parseExpr "{name: \"Alice\", \"user-id\": 123}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("user-id", Atom (Number 123))])
     
     it "parses records with different value types (string, number, boolean)" $ do
-      parseExpr "{name: \"Alice\", age: 30, active: #t}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30)), ("active", Atom (Bool True))])
-      parseExpr "{count: 0, empty: #f, label: \"test\"}" `shouldBe` Right (RecordLiteral [("count", Atom (Number 0)), ("empty", Atom (Bool False)), ("label", Atom (String "test"))])
+      parseExpr "{name: \"Alice\", age: 30, active: true}" `shouldBe` Right (RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30)), ("active", Atom (Bool True))])
+      parseExpr "{count: 0, empty: false, label: \"test\"}" `shouldBe` Right (RecordLiteral [("count", Atom (Number 0)), ("empty", Atom (Bool False)), ("label", Atom (String "test"))])
     
     it "reports error for unclosed record" $ do
       case parseExpr "{name: \"Alice\"" of
@@ -95,4 +95,10 @@ spec = describe "PatternLisp.Parser" $ do
       case parseExpr "{123: \"value\"}" of
         Left (ParseError _) -> True `shouldBe` True
         _ -> fail "Expected ParseError for invalid key (number)"
+
+    it "parses record with splice using single comma {a: 1,@b} (comma not consumed by separator)" $ do
+      parseExpr "{a: 1,@b}" `shouldBe` Right (RecordLiteral [("a", Atom (Number 1)), ("", UnquoteSplice (Atom (Symbol "b")))])
+
+    it "parses record with splice after another entry {a: 1, ,@b}" $ do
+      parseExpr "{a: 1, ,@b}" `shouldBe` Right (RecordLiteral [("a", Atom (Number 1)), ("", UnquoteSplice (Atom (Symbol "b")))])
 

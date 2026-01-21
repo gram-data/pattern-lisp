@@ -222,7 +222,7 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
               _ -> fail $ "Expected VMap, got: " ++ show val
     
     it "evaluates records with different value types" $ do
-      case parseExpr "{name: \"Alice\", age: 30, active: #t, count: 0}" of
+      case parseExpr "{name: \"Alice\", age: 30, active: true, count: 0}" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -245,7 +245,114 @@ spec = describe "PatternLisp.Eval - Core Language Forms" $ do
             Left err -> fail $ "Eval error 2: " ++ show err
             Right v -> return v
           val1 `shouldBe` val2  -- Should be equal despite different key order
-        _ -> fail "Parse error in record equality test"
+  
+  describe "Record quasiquotation" $ do
+    it "evaluates unquoting in record literal" $ do
+      case parseExpr "(let ((name \"Alice\") (age 30)) `{ name: ,name, age: ,age })" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates splicing record in record literal" $ do
+      case parseExpr "(let ((base { role: \"Engineer\" })) `{ name: \"Alice\", ,@base })" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "role" m `shouldBe` Just (VString "Engineer")
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates combined unquoting and splicing" $ do
+      case parseExpr "(let ((name \"Alice\") (base { age: 30 })) `{ name: ,name, ,@base })" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "reports error when splicing non-record" $ do
+      case parseExpr "`{ name: \"Alice\", ,@42 }" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left (TypeMismatch _ _) -> True `shouldBe` True
+          Left err -> fail $ "Expected TypeMismatch, got: " ++ show err
+          Right _ -> fail "Expected error for splicing non-record"
+
+    it "exprToValue/quasiquote: spliced record overrides earlier key (spliceMap takes precedence)" $ do
+      -- In `{x: 1, ,@b}` with b={x: 2}, the splice must override: x=2. exprToValue
+      -- (used for Quote) had used Map.union acc spliceMap; it must be
+      -- Map.union spliceMap acc to match eval's semantics.
+      case parseExpr "(let ((b {x: 2})) `{x: 1, ,@b})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> Map.lookup "x" m `shouldBe` Just (VInteger 2)
+              _ -> fail $ "Expected VMap with x=2, got: " ++ show val
+  
+  describe "Record edge cases" $ do
+    it "handles nested records (2 levels deep)" $ do
+      -- Test basic nesting (gram parser can handle 2 levels)
+      case parseExpr "{outer: {inner: \"value\"}}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 1
+                case Map.lookup "outer" m of
+                  Just (VMap inner) -> case Map.lookup "inner" inner of
+                    Just (VString "value") -> True `shouldBe` True
+                    _ -> fail "Expected string value in inner record"
+                  _ -> fail "Expected inner record"
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "handles records with multiple value types as values" $ do
+      -- Test records with various value types (avoiding nested records and keywords to prevent gram parser issues)
+      case parseExpr "{integer: 42, string: \"hello\", boolean: true}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 3
+                Map.lookup "integer" m `shouldBe` Just (VInteger 42)
+                Map.lookup "string" m `shouldBe` Just (VString "hello")
+                Map.lookup "boolean" m `shouldBe` Just (VBoolean True)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "handles empty records" $ do
+      case parseExpr "{a: {}, b: {}}" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 2
+                case Map.lookup "a" m of
+                  Just (VMap empty1) -> Map.size empty1 `shouldBe` 0
+                  _ -> fail "Expected empty record"
+                case Map.lookup "b" m of
+                  Just (VMap empty2) -> Map.size empty2 `shouldBe` 0
+                  _ -> fail "Expected empty record"
+              _ -> fail $ "Expected VMap, got: " ++ show val
   
   describe "Subject Labels as String Sets" $ do
     it "creates Subject label set #{\"Person\" \"Employee\"}" $ do

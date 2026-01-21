@@ -11,7 +11,8 @@ import System.Environment
 import System.Exit
 import qualified Data.Text as T
 import qualified Data.Map as Map
-import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn)
+import qualified Data.Set as Set
+import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn, intercalate)
 import Data.Maybe (maybe)
 import Control.Applicative ((<|>))
 
@@ -19,12 +20,20 @@ import Control.Applicative ((<|>))
 formatValue :: Value -> String
 formatValue (VInteger n) = show n
 formatValue (VString s) = "\"" ++ s ++ "\""
-formatValue (VBoolean True) = "#t"
-formatValue (VBoolean False) = "#f"
+formatValue (VBoolean True) = "true"
+formatValue (VBoolean False) = "false"
 formatValue (VArray vals) = "(" ++ unwords (map formatValue vals) ++ ")"
+formatValue (VMap m) = "{" ++ intercalate ", " (map (\(k, v) -> k ++ ": " ++ formatValue v) (Map.toList m)) ++ "}"
 formatValue (VPattern _) = "<pattern>"
 formatValue (VClosure _) = "<closure>"
 formatValue (VPrimitive _) = "<primitive>"
+formatValue (VKeyword k) = k ++ ":"
+formatValue (VSet s) = "#{" ++ unwords (map formatValue (Set.toList s)) ++ "}"
+formatValue (VDecimal d) = show d
+formatValue (VSymbol s) = s
+formatValue (VTaggedString tag val) = tag ++ ":" ++ val
+formatValue (VRange _) = "<range>"
+formatValue (VMeasurement unit val) = show val ++ " " ++ unit
 
 -- | Format a Value type for display in variable listing
 formatValueType :: Value -> String
@@ -32,9 +41,17 @@ formatValueType (VInteger _) = "Number"
 formatValueType (VString _) = "String"
 formatValueType (VBoolean _) = "Bool"
 formatValueType (VArray _) = "List"
+formatValueType (VMap _) = "Record"
 formatValueType (VPattern _) = "Pattern"
 formatValueType (VClosure (Closure params _ _)) = "Closure(" ++ unwords params ++ ")"
 formatValueType (VPrimitive _) = "Primitive"
+formatValueType (VKeyword _) = "Keyword"
+formatValueType (VSet _) = "Set"
+formatValueType (VDecimal _) = "Decimal"
+formatValueType (VSymbol _) = "Symbol"
+formatValueType (VTaggedString _ _) = "TaggedString"
+formatValueType (VRange _) = "Range"
+formatValueType (VMeasurement _ _) = "Measurement"
 
 -- | Format environment variables for display
 formatEnv :: Env -> String

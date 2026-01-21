@@ -78,52 +78,52 @@ Records are values that can be used with existing pattern-lisp functions. Patter
 
 ```lisp
 ;; Get value by key
-(record-get { name: "Alice", age: 30 } "name")              ;; => "Alice"
-(record-get { name: "Alice" } "age")                       ;; => nil
-(record-get { name: "Alice" } "age" 0)                      ;; => 0 (default)
+(get { name: "Alice", age: 30 } "name")              ;; => "Alice"
+(get { name: "Alice" } "age")                       ;; => () (nil)
+(get { name: "Alice" } "age" 0)                      ;; => 0 (default)
 
 ;; Check key existence
-(record-has? { name: "Alice" } "name")                     ;; => true
-(record-has? { name: "Alice" } "age")                      ;; => false
+(has? { name: "Alice" } "name")                     ;; => true
+(has? { name: "Alice" } "age")                      ;; => false
 
 ;; Get all keys
-(record-keys { name: "Alice", age: 30 })                   ;; => ("name" "age")
+(keys { name: "Alice", age: 30 })                   ;; => ("name" "age")
 
 ;; Get all values
-(record-values { name: "Alice", age: 30 })                 ;; => ("Alice" 30)
+(values { name: "Alice", age: 30 })                 ;; => ("Alice" 30)
 
 ;; Convert to association list
-(record->alist { name: "Alice", age: 30 })                 ;; => (("name" . "Alice") ("age" . 30))
+(record->alist { name: "Alice", age: 30 })                 ;; => (("name" "Alice") ("age" 30))
 ```
 
 ### Construction Operations
 
 ```lisp
 ;; Programmatic construction
-(record :name "Alice" :age 30)                             ;; => { name: "Alice", age: 30 }
+(record "name" "Alice" "age" 30)                             ;; => { name: "Alice", age: 30 }
 
 ;; From association list
-(alist->record '(("name" . "Alice") ("age" . 30)))         ;; => { name: "Alice", age: 30 }
+(alist->record '(("name" "Alice") ("age" 30)))         ;; => { name: "Alice", age: 30 }
 ```
 
 ### Transformation Operations
 
 ```lisp
 ;; Add/update key-value pair (returns new record)
-(record-set { name: "Alice" } "age" 30)                     ;; => { name: "Alice", age: 30 }
+(assoc { name: "Alice" } "age" 30)                     ;; => { name: "Alice", age: 30 }
 
 ;; Remove key (returns new record)
-(record-remove { name: "Alice", age: 30 } "age")           ;; => { name: "Alice" }
+(dissoc { name: "Alice", age: 30 } "age")           ;; => { name: "Alice" }
 
 ;; Merge two records (right takes precedence)
-(record-merge { name: "Alice" } { age: 30 })                ;; => { name: "Alice", age: 30 }
-(record-merge { name: "Alice" } { name: "Bob" })            ;; => { name: "Bob" }
+(merge { name: "Alice" } { age: 30 })                ;; => { name: "Alice", age: 30 }
+(merge { name: "Alice" } { name: "Bob" })            ;; => { name: "Bob" }
 
 ;; Map over values
-(record-map (lambda (k v) (* v 2)) { count: 5, total: 10 }) ;; => { count: 10, total: 20 }
+(map (lambda (k v) (* v 2)) { count: 5, total: 10 }) ;; => { count: 10, total: 20 }
 
 ;; Filter entries
-(record-filter (lambda (k v) (> v 5)) { a: 10, b: 3, c: 7 }) ;; => { a: 10, c: 7 }
+(filter (lambda (k v) (> v 5)) { a: 10, b: 3, c: 7 }) ;; => { a: 10, c: 7 }
 ```
 
 ### Immutability
@@ -131,7 +131,7 @@ Records are values that can be used with existing pattern-lisp functions. Patter
 ```lisp
 ;; All operations return new records, originals unchanged
 (let ((r { name: "Alice" }))
-  (record-set r "age" 30)
+  (assoc r "age" 30)
   r)  ;; => { name: "Alice" } (unchanged)
 ```
 
@@ -183,10 +183,7 @@ Records support unquoting and splicing for dynamic construction.
 ```lisp
 ;; Start with empty record, add keys
 (let ((r { }))
-  (-> r
-      (record-set "name" "Alice")
-      (record-set "age" 30)
-      (record-set "role" "Engineer")))  ;; => { name: "Alice", age: 30, role: "Engineer" }
+  (assoc (assoc (assoc r "name" "Alice") "age" 30) "role" "Engineer"))  ;; => { name: "Alice", age: 30, role: "Engineer" }
 ```
 
 ### Merging Multiple Records
@@ -195,14 +192,14 @@ Records support unquoting and splicing for dynamic construction.
 ;; Combine multiple records
 (let ((personal { name: "Alice", age: 30 })
       (work { role: "Engineer", dept: "Engineering" }))
-  (record-merge personal work))  ;; => { name: "Alice", age: 30, role: "Engineer", dept: "Engineering" }
+  (merge personal work))  ;; => { name: "Alice", age: 30, role: "Engineer", dept: "Engineering" }
 ```
 
 ### Filtering Records
 
 ```lisp
 ;; Keep only certain keys
-(record-filter (lambda (k v) (member k '("name" "age"))) 
+(filter (lambda (k v) (member k '("name" "age"))) 
                { name: "Alice", age: 30, role: "Engineer" })
 ;; => { name: "Alice", age: 30 }
 ```
@@ -211,7 +208,7 @@ Records support unquoting and splicing for dynamic construction.
 
 ```lisp
 ;; Apply function to all values
-(record-map (lambda (k v) (if (string? v) (string-upcase v) v))
+(map (lambda (k v) (if (string? v) (string-upcase v) v))
             { name: "alice", age: 30 })  ;; => { name: "ALICE", age: 30 }
 ```
 
@@ -233,10 +230,10 @@ Records support unquoting and splicing for dynamic construction.
 
 ```lisp
 ;; Non-record in record operation
-(record-get 42 "name")          ;; => TypeMismatch: "Expected record, got number"
+(get 42 "name")          ;; => TypeMismatch: "Expected record, got number"
 
 ;; Non-string key
-(record-get { name: "Alice" } 42) ;; => TypeMismatch: "Expected string key, got number"
+(get { name: "Alice" } 42) ;; => TypeMismatch: "Expected string key, got number"
 ```
 
 ---

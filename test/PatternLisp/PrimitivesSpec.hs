@@ -267,38 +267,31 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Set.member (VInteger 3) s `shouldBe` True
               _ -> fail $ "Expected VSet, got: " ++ show val
   
-  describe "Map operations" $ do
-    it "evaluates get primitive (get {name: \"Alice\"} name:)" $ do
-      case parseExpr "(get {name: \"Alice\"} name:)" of
+  describe "Record operations" $ do
+    it "evaluates get primitive (get {name: \"Alice\"} \"name\")" $ do
+      case parseExpr "(get {name: \"Alice\"} \"name\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VString ( "Alice")
     
-    it "evaluates get with default (get {name: \"Alice\"} age: 0)" $ do
-      case parseExpr "(get {name: \"Alice\"} age: 0)" of
+    it "evaluates get with default (get {name: \"Alice\"} \"age\" 0)" $ do
+      case parseExpr "(get {name: \"Alice\"} \"age\" 0)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VInteger 0
     
-    it "evaluates get-in primitive (get-in {user: {name: \"Alice\"}} (quote (user: name:)))" $ do
-      -- Note: get-in expects a list of keywords, but quoted lists convert keywords to strings
-      -- For now, we'll test with a simpler nested access or skip this test
-      -- The implementation needs to handle keyword conversion from quoted lists
-      case parseExpr "(get {user: {name: \"Alice\"}} user:)" of
+    -- get-in removed - use nested get instead
+    it "evaluates nested get (get (get {user: {name: \"Alice\"}} \"user\") \"name\")" $ do
+      case parseExpr "(get (get {user: {name: \"Alice\"}} \"user\") \"name\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
-          Right val -> do
-            case val of
-              VMap nestedMap -> do
-                Map.lookup "name" nestedMap `shouldBe` Just (VString "Alice")
-              _ -> fail $ "Expected nested map, got: " ++ show val
+          Right val -> val `shouldBe` VString "Alice"
     
-    it "get-in returns map when path ends at map (get-in {a: {b: 42}} (quote (a:)))" $ do
-      -- Test the bug fix: when path ends at a map, should return the map, not nil
-      case parseExpr "(get-in {a: {b: 42}} (quote (a:)))" of
+    it "nested get returns record when path ends at record (get {a: {b: 42}} \"a\")" $ do
+      case parseExpr "(get {a: {b: 42}} \"a\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -308,8 +301,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Map.lookup "b" nestedMap `shouldBe` Just (VInteger 42)
               _ -> fail $ "Expected VMap {b: 42}, got: " ++ show val
     
-    it "evaluates assoc primitive (assoc {name: \"Alice\"} age: 30)" $ do
-      case parseExpr "(assoc {name: \"Alice\"} age: 30)" of
+    it "evaluates assoc primitive (assoc {name: \"Alice\"} \"age\" 30)" $ do
+      case parseExpr "(assoc {name: \"Alice\"} \"age\" 30)" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -320,8 +313,8 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Map.lookup "age" m `shouldBe` Just (VInteger 30)
               _ -> fail $ "Expected VMap, got: " ++ show val
     
-    it "evaluates dissoc primitive (dissoc {name: \"Alice\" age: 30} age:)" $ do
-      case parseExpr "(dissoc {name: \"Alice\", age: 30} age:)" of
+    it "evaluates dissoc primitive (dissoc {name: \"Alice\", age: 30} \"age\")" $ do
+      case parseExpr "(dissoc {name: \"Alice\", age: 30} \"age\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
@@ -332,37 +325,16 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Map.member "age" m `shouldBe` False
               _ -> fail $ "Expected VMap, got: " ++ show val
     
-    it "evaluates update primitive (update {count: 5} count: (lambda (x) (+ x 1)))" $ do
-      case parseExpr "(update {count: 5} count: (lambda (x) (+ x 1)))" of
-        Left err -> fail $ "Parse error: " ++ show err
-        Right expr -> case evalExpr expr initialEnv of
-          Left err -> fail $ "Eval error: " ++ show err
-          Right val -> do
-            case val of
-              VMap m -> do
-                Map.lookup "count" m `shouldBe` Just (VInteger 6)
-              _ -> fail $ "Expected VMap, got: " ++ show val
+    -- update operation removed - use get + assoc pattern instead
     
-    it "evaluates update on non-existent key (update {} count: (lambda (x) (if (= x ()) 0 (+ x 1))))" $ do
-      case parseExpr "(update {} count: (lambda (x) (if (= x ()) 0 (+ x 1))))" of
-        Left err -> fail $ "Parse error: " ++ show err
-        Right expr -> case evalExpr expr initialEnv of
-          Left err -> fail $ "Eval error: " ++ show err
-          Right val -> do
-            case val of
-              VMap m -> do
-                -- Should create key with function applied to nil
-                Map.member "count" m `shouldBe` True
-              _ -> fail $ "Expected VMap, got: " ++ show val
-    
-    it "evaluates contains? for maps (contains? {name: \"Alice\"} name:)" $ do
-      case parseExpr "(contains? {name: \"Alice\"} name:)" of
+    it "evaluates contains? for records (contains? {name: \"Alice\"} \"name\")" $ do
+      case parseExpr "(contains? {name: \"Alice\"} \"name\")" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
           Left err -> fail $ "Eval error: " ++ show err
           Right val -> val `shouldBe` VBoolean True
     
-    it "evaluates empty? for maps (empty? {})" $ do
+    it "evaluates empty? for records (empty? {})" $ do
       case parseExpr "(empty? {})" of
         Left err -> fail $ "Parse error: " ++ show err
         Right expr -> case evalExpr expr initialEnv of
@@ -380,5 +352,249 @@ spec = describe "PatternLisp.Primitives and PatternLisp.Eval" $ do
                 Map.size m `shouldBe` 2
                 Map.lookup "name" m `shouldBe` Just (VString "Alice")
                 Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+  
+  describe "Record operations" $ do
+    it "evaluates record? type predicate" $ do
+      case parseExpr "(record? {name: \"Alice\"})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBoolean True
+      case parseExpr "(record? 42)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBoolean False
+    
+    it "evaluates get with existing key" $ do
+      case parseExpr "(get {name: \"Alice\", age: 30} \"name\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VString "Alice"
+    
+    it "evaluates get with missing key (no default)" $ do
+      case parseExpr "(get {name: \"Alice\"} \"age\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VArray []  -- nil
+    
+    it "evaluates get with missing key (with default)" $ do
+      case parseExpr "(get {name: \"Alice\"} \"age\" 0)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VInteger 0
+    
+    it "evaluates has? predicate" $ do
+      case parseExpr "(has? {name: \"Alice\"} \"name\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBoolean True
+      case parseExpr "(has? {name: \"Alice\"} \"age\")" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> val `shouldBe` VBoolean False
+    
+    it "evaluates keys operation" $ do
+      case parseExpr "(keys {name: \"Alice\", age: 30})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VArray keys -> do
+                length keys `shouldBe` 2
+                VString "name" `elem` keys `shouldBe` True
+                VString "age" `elem` keys `shouldBe` True
+              _ -> fail $ "Expected VArray of keys, got: " ++ show val
+    
+    it "evaluates values operation" $ do
+      case parseExpr "(values {name: \"Alice\", age: 30})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VArray values -> do
+                length values `shouldBe` 2
+                VString "Alice" `elem` values `shouldBe` True
+                VInteger 30 `elem` values `shouldBe` True
+              _ -> fail $ "Expected VArray of values, got: " ++ show val
+    
+    it "evaluates assoc operation (immutability)" $ do
+      case parseExpr "(let ((r {name: \"Alice\"})) (assoc r \"age\" 30))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates dissoc operation (immutability)" $ do
+      case parseExpr "(let ((r {name: \"Alice\", age: 30})) (dissoc r \"age\"))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.member "age" m `shouldBe` False
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates merge operation" $ do
+      case parseExpr "(merge {name: \"Alice\"} {age: 30})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+      case parseExpr "(merge {name: \"Alice\"} {name: \"Bob\"})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> Map.lookup "name" m `shouldBe` Just (VString "Bob")  -- Right takes precedence
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates map operation" $ do
+      case parseExpr "(map (lambda (k v) (* v 2)) {count: 5, total: 10})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.lookup "count" m `shouldBe` Just (VInteger 10)
+                Map.lookup "total" m `shouldBe` Just (VInteger 20)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates filter operation" $ do
+      case parseExpr "(filter (lambda (k v) (> v 5)) {a: 10, b: 3, c: 7})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 2
+                Map.lookup "a" m `shouldBe` Just (VInteger 10)
+                Map.lookup "c" m `shouldBe` Just (VInteger 7)
+                Map.member "b" m `shouldBe` False
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates record->alist conversion" $ do
+      case parseExpr "(record->alist {name: \"Alice\", age: 30})" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VArray pairs -> do
+                length pairs `shouldBe` 2
+                -- Check that pairs are [key, value] format
+                all (\pair -> case pair of VArray [_, _] -> True; _ -> False) pairs `shouldBe` True
+              _ -> fail $ "Expected VArray of pairs, got: " ++ show val
+    
+    it "evaluates alist->record conversion" $ do
+      case parseExpr "(alist->record '((\"name\" \"Alice\") (\"age\" 30)))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "evaluates record constructor function" $ do
+      case parseExpr "(record \"name\" \"Alice\" \"age\" 30)" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 2
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.lookup "age" m `shouldBe` Just (VInteger 30)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "verifies immutability (original records unchanged)" $ do
+      case parseExpr "(let ((r {name: \"Alice\"})) (begin (assoc r \"age\" 30) r))" of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (val, _) -> do
+            case val of
+              VMap m -> do
+                -- Original record should be unchanged (no age key)
+                Map.size m `shouldBe` 1
+                Map.lookup "name" m `shouldBe` Just (VString "Alice")
+                Map.member "age" m `shouldBe` False
+              _ -> fail $ "Expected VMap, got: " ++ show val
+  
+  describe "Record performance tests" $ do
+    it "handles large records (1000+ keys) efficiently" $ do
+      -- Create a record with 1000 keys programmatically using record constructor
+      let keys = map (\i -> "key" ++ show i) [1..1000]
+          recordArgs = concatMap (\i -> ["\"key" ++ show i ++ "\"", show i]) [1..1000]
+          recordExpr = "(record " ++ unwords recordArgs ++ ")"
+      case parseExpr recordExpr of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> do
+                Map.size m `shouldBe` 1000
+                -- Verify we can access keys
+                Map.lookup "key1" m `shouldBe` Just (VInteger 1)
+                Map.lookup "key500" m `shouldBe` Just (VInteger 500)
+                Map.lookup "key1000" m `shouldBe` Just (VInteger 1000)
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "handles large record operations (get, has?, keys, values) efficiently" $ do
+      -- Create a record with 2000 keys and test operations
+      let recordArgs = concatMap (\i -> ["\"k" ++ show i ++ "\"", show i]) [1..2000]
+          recordExpr = "(record " ++ unwords recordArgs ++ ")"
+          testExpr = "(let ((r " ++ recordExpr ++ ")) (begin (get r \"k1000\") (has? r \"k1500\") (keys r) (values r) r))"
+      case parseExpr testExpr of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> Map.size m `shouldBe` 2000
+              _ -> fail $ "Expected VMap, got: " ++ show val
+    
+    it "handles large record merge operations efficiently" $ do
+      -- Create two records with 500 keys each, merge them
+      let record1Args = concatMap (\i -> ["\"a" ++ show i ++ "\"", "1"]) [1..500]
+          record2Args = concatMap (\i -> ["\"b" ++ show i ++ "\"", "2"]) [1..500]
+          record1Expr = "(record " ++ unwords record1Args ++ ")"
+          record2Expr = "(record " ++ unwords record2Args ++ ")"
+          mergeExpr = "(merge " ++ record1Expr ++ " " ++ record2Expr ++ ")"
+      case parseExpr mergeExpr of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right val -> do
+            case val of
+              VMap m -> Map.size m `shouldBe` 1000
               _ -> fail $ "Expected VMap, got: " ++ show val
 

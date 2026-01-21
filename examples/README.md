@@ -61,6 +61,19 @@ Demonstrates basic pattern construction and querying operations. Shows how to cr
 
 Demonstrates pattern predicate primitives (`pattern-find`, `pattern-any?`, `pattern-all?`). Shows how to search and filter patterns using predicate closures that recursively traverse pattern structures.
 
+### `records.plisp`
+
+Demonstrates record creation, manipulation, and operations using the inline record notation `{key: value, ...}`. Shows:
+- Basic record creation with various value types
+- Record operations: `get`, `has?`, `keys`, `values`, `assoc`, `dissoc`, `merge`
+- Record transformations: `map`, `filter`
+- Record conversion: `record->alist`, `alist->record`
+- Nested records
+- Quasiquotation with records (unquoting and splicing)
+- Real-world examples (user profiles, configuration objects, pattern subjects)
+
+Records are gram-compatible and use comma-separated key-value pairs. Keys can be identifiers or strings, and values can be any pattern-lisp value type.
+
 ## Notes
 
 - All examples use `.plisp` extension to distinguish them from other Lisp implementations

@@ -242,6 +242,11 @@ exprToSubject (Atom (Keyword name)) = Subject
   , labels = Set.fromList ["Keyword"]
   , properties = Map.fromList [("name", SubjectValue.VString name)]
   }
+exprToSubject (ArrayLiteral exprs) = Subject
+  { identity = SubjectCore.Symbol ""
+  , labels = Set.fromList ["List"]
+  , properties = Map.fromList [("elements", SubjectValue.VArray (map (subjectToSubjectValue . exprToSubject) exprs))]
+  }
 exprToSubject (SetLiteral exprs) = Subject
   { identity = SubjectCore.Symbol ""
   , labels = Set.fromList ["Set"]

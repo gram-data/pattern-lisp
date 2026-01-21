@@ -11,6 +11,7 @@ This project provides a tiny, well-specified Lisp evaluator that serves as a ref
 **Minimal Core Language**
 - Small expression set: `lambda`, `if`, `let`, `define`, `quote`, `begin`
 - Basic primitives: arithmetic, comparisons, string operations
+- Data structures: records (key-value), arrays, sets
 - No I/O in core - host capabilities exposed through explicit boundary
 - Tail-recursive, expression-only evaluation (Scheme-ish)
 - Purely functional semantics with immutable environments

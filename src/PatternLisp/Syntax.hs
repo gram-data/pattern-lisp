@@ -37,6 +37,7 @@ import qualified Subject.Value as SubjectValue
 data Expr
   = Atom Atom          -- ^ Symbols, numbers, strings, booleans
   | List [Expr]        -- ^ S-expressions (function calls, special forms)
+  | ArrayLiteral [Expr]  -- ^ Array literals [...] (gram-compatible, comma-separated)
   | SetLiteral [Expr]  -- ^ Set literals #{...}
   | RecordLiteral [(String, Expr)]  -- ^ Record literals {key: value, ...} (comma-separated, gram-compatible)
   | Quote Expr         -- ^ Quoted expressions (prevent evaluation)
@@ -49,7 +50,7 @@ data Atom
   = Symbol String      -- ^ Variable names, function names
   | Number Integer     -- ^ Integer literals
   | String String      -- ^ String literals (gram uses String, not Text)
-  | Bool Bool          -- ^ Boolean literals (#t, #f)
+  | Bool Bool          -- ^ Boolean literals (true/false, gram-compatible)
   | Keyword String     -- ^ Keywords with postfix colon syntax (name:)
   deriving (Eq, Show)
 
@@ -185,13 +186,20 @@ data Primitive
   | SetEqual          -- ^ (set-equal? set1 set2): check if sets are equal
   | SetEmpty          -- ^ (empty? set): check if set is empty
   | HashSet           -- ^ (hash-set ...): create set from arguments
-  -- Map operations
-  | MapGet            -- ^ (get map key [default]): get value at key, return default or nil if not found
-  | MapGetIn          -- ^ (get-in map [key1 key2 ...]): nested access via keyword path
-  | MapAssoc          -- ^ (assoc map key value): add/update key-value pair
-  | MapDissoc         -- ^ (dissoc map key): remove key from map
-  | MapUpdate         -- ^ (update map key f): apply function to value at key, create with f(nil) if missing
-  | Record            -- ^ (record key1 val1 key2 val2 ...): create record from alternating keyword-value pairs (replaces HashMap)
+  | Record            -- ^ (record key1 val1 key2 val2 ...): create record from alternating keyword-value pairs
+  -- Record operations
+  | RecordType        -- ^ (record? value): type predicate for records
+  | RecordGet         -- ^ (get record key [default]): get value from record by key
+  | RecordHas         -- ^ (has? record key): check if record contains key
+  | RecordKeys        -- ^ (keys record): get all keys from record as list
+  | RecordValues      -- ^ (values record): get all values from record as list
+  | RecordToAlist     -- ^ (record->alist record): convert record to association list
+  | AlistToRecord     -- ^ (alist->record alist): convert association list to record
+  | RecordSet         -- ^ (assoc record key value): add/update key-value pair (returns new record)
+  | RecordRemove      -- ^ (dissoc record key): remove key from record (returns new record)
+  | RecordMerge       -- ^ (merge record1 record2): merge two records (right takes precedence)
+  | RecordMap         -- ^ (map function record): map function over record values
+  | RecordFilter      -- ^ (filter predicate record): filter record entries by predicate
   deriving (Eq, Show, Ord)
 
 -- | Environment mapping variable names to values
@@ -241,12 +249,19 @@ primitiveName SetSubset = "set-subset?"
 primitiveName SetEqual = "set-equal?"
 primitiveName SetEmpty = "empty?"
 primitiveName HashSet = "hash-set"
-primitiveName MapGet = "get"
-primitiveName MapGetIn = "get-in"
-primitiveName MapAssoc = "assoc"
-primitiveName MapDissoc = "dissoc"
-primitiveName MapUpdate = "update"
 primitiveName Record = "record"
+primitiveName RecordType = "record?"
+primitiveName RecordGet = "get"
+primitiveName RecordHas = "has?"
+primitiveName RecordKeys = "keys"
+primitiveName RecordValues = "values"
+primitiveName RecordToAlist = "record->alist"
+primitiveName AlistToRecord = "alist->record"
+primitiveName RecordSet = "assoc"
+primitiveName RecordRemove = "dissoc"
+primitiveName RecordMerge = "merge"
+primitiveName RecordMap = "map"
+primitiveName RecordFilter = "filter"
 
 -- | Look up a Primitive by its string name (for deserialization)
 primitiveFromName :: String -> Maybe Primitive
@@ -281,14 +296,21 @@ primitiveFromName "set-difference" = Just SetDifference
 primitiveFromName "set-symmetric-difference" = Just SetSymmetricDifference
 primitiveFromName "set-subset?" = Just SetSubset
 primitiveFromName "set-equal?" = Just SetEqual
-primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and maps
+primitiveFromName "empty?" = Just SetEmpty  -- Note: empty? works for both sets and records
 primitiveFromName "hash-set" = Just HashSet
-primitiveFromName "get" = Just MapGet
-primitiveFromName "get-in" = Just MapGetIn
-primitiveFromName "assoc" = Just MapAssoc
-primitiveFromName "dissoc" = Just MapDissoc
-primitiveFromName "update" = Just MapUpdate
 primitiveFromName "record" = Just Record
 primitiveFromName "hash-map" = Just Record  -- Backward compatibility alias (deprecated)
+primitiveFromName "record?" = Just RecordType
+primitiveFromName "get" = Just RecordGet
+primitiveFromName "has?" = Just RecordHas
+primitiveFromName "keys" = Just RecordKeys
+primitiveFromName "values" = Just RecordValues
+primitiveFromName "record->alist" = Just RecordToAlist
+primitiveFromName "alist->record" = Just AlistToRecord
+primitiveFromName "assoc" = Just RecordSet
+primitiveFromName "dissoc" = Just RecordRemove
+primitiveFromName "merge" = Just RecordMerge
+primitiveFromName "map" = Just RecordMap
+primitiveFromName "filter" = Just RecordFilter
 primitiveFromName _ = Nothing
 

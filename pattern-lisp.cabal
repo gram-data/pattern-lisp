@@ -52,6 +52,7 @@ test-suite pattern-lisp-test
                      , PatternLisp.PatternSpec
                      , PatternLisp.PrimitivesSpec
                      , PatternLisp.RuntimeSpec
+                     , PatternLisp.RecordGramCompatibilitySpec
                      , Properties
                      , REPLSpec
   build-depends:       base >=4.18 && <5
@@ -62,6 +63,7 @@ test-suite pattern-lisp-test
                      , containers
                      , pattern
                      , subject
+                     , gram
                      , mtl
   default-language:    Haskell2010
 
