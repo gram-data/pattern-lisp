@@ -36,6 +36,7 @@ executable pattern-lisp
                      , pattern
                      , subject
                      , gram
+                     , filepath
   default-language:    Haskell2010
 
 test-suite pattern-lisp-test
@@ -44,6 +45,7 @@ test-suite pattern-lisp-test
   hs-source-dirs:      test
   other-modules:       ExamplesSpec
                      , IntegrationSpec
+                     , PatternLisp.ConvertSpec
                      , PatternLisp.CodecSpec
                      , PatternLisp.EvalSpec
                      , PatternLisp.GramSerializationSpec
@@ -65,5 +67,9 @@ test-suite pattern-lisp-test
                      , subject
                      , gram
                      , mtl
+                     , process
+                     , directory
+                     , filepath
+                     , temporary
   default-language:    Haskell2010
 

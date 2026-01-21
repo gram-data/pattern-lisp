@@ -58,6 +58,9 @@ module PatternLisp.Codec
   , patternSubjectToValue
   , programToGram
   , gramToProgram
+  -- Plisp source serialization (008-plisp-gram-convert)
+  , exprToPlisp
+  , valueToPlispSource
   ) where
 
 import PatternLisp.Syntax
@@ -70,7 +73,7 @@ import qualified Subject.Core as SubjectCore
 import qualified Subject.Value as SubjectValue
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Data.List (nubBy)
+import Data.List (nubBy, intercalate)
 import Data.Maybe (mapMaybe)
 import Control.Monad.State (State, runState, get, modify)
 import Control.Monad (foldM)
@@ -1483,6 +1486,120 @@ extractParamName pat = do
       Just (SubjectValue.VString name) -> Right name
       _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VArray [])
     else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VArray [])
+
+-- ============================================================================
+-- Plisp source serialization (008-plisp-gram-convert)
+-- ============================================================================
+-- exprToPlisp and valueToPlispSource produce plisp source that parses and
+-- (for valueToPlispSource) evaluates to equivalent Expr/Value. Used by
+-- gram→plisp in the convert CLI.
+
+-- | Escape a string for double-quoted plisp string literals.
+-- Handles \\, \", \n, \t, \r.
+escapeString :: String -> String
+escapeString = concatMap esc
+  where
+    esc '\\' = "\\\\"
+    esc '"'  = "\\\""
+    esc '\n' = "\\n"
+    esc '\t' = "\\t"
+    esc '\r' = "\\r"
+    esc c    = [c]
+
+-- | True if the expression contains Unquote or UnquoteSplice (requires quasiquote context).
+containsUnquote :: Expr -> Bool
+containsUnquote (Unquote _)       = True
+containsUnquote (UnquoteSplice _) = True
+containsUnquote (List es)         = any containsUnquote es
+containsUnquote (Quote e)         = containsUnquote e
+containsUnquote (ArrayLiteral es) = any containsUnquote es
+containsUnquote (SetLiteral es)   = any containsUnquote es
+containsUnquote (RecordLiteral ps) = any (containsUnquote . snd) ps
+containsUnquote _                 = False
+
+-- | Emit record key as plisp: bare identifier or \"key\" for arbitrary strings.
+-- Parser accepts Symbol (identifier) or string for keys.
+recordKeyPlisp :: String -> String
+recordKeyPlisp k
+  | isBareKey k = k
+  | otherwise   = "\"" ++ escapeString k ++ "\""
+  where
+    -- Identifier-like: first char letter or !$%&*+-./<=>?@^_~, rest same or digit or :
+    isBareKey s = case s of
+      (c:cs) -> isIdFirst c && all isIdRest cs
+      []     -> False
+    isIdFirst c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                  || c `elem` ("!$%&*+-./<=>?@^_~" :: String)
+    isIdRest c  = isIdFirst c || (c >= '0' && c <= '9') || c == ':'
+
+-- | Serialize Expr to plisp source. Round-trip: parseExpr (exprToPlisp e) ≡ Right e
+-- for supported forms. Unquote/UnquoteSplice are emitted in quasiquote form when present.
+exprToPlisp :: Expr -> String
+exprToPlisp e
+  | containsUnquote e = "`" ++ exprToPlispQuasi e
+  | otherwise         = exprToPlispSimple e
+
+exprToPlispSimple :: Expr -> String
+exprToPlispSimple (Atom (Symbol s))   = s
+exprToPlispSimple (Atom (Number n))   = show n
+exprToPlispSimple (Atom (String s))   = "\"" ++ escapeString s ++ "\""
+exprToPlispSimple (Atom (Bool True))  = "true"
+exprToPlispSimple (Atom (Bool False)) = "false"
+exprToPlispSimple (Atom (Keyword k))  = k ++ ":"
+exprToPlispSimple (List es)           = "(" ++ intercalate " " (map exprToPlisp es) ++ ")"
+exprToPlispSimple (Quote e)           = "'" ++ exprToPlisp e
+exprToPlispSimple (ArrayLiteral es)   = "[" ++ intercalate ", " (map exprToPlisp es) ++ "]"
+exprToPlispSimple (SetLiteral es)     = "#{" ++ intercalate " " (map exprToPlisp es) ++ "}"
+exprToPlispSimple (RecordLiteral ps)  = "{" ++ intercalate ", " (map recordEntry ps) ++ "}"
+  where recordEntry (key, Unquote v)        = recordKeyPlisp key ++ ": , " ++ exprToPlisp v
+        recordEntry (key, UnquoteSplice v)  = if null key
+          then ",@ " ++ exprToPlisp v
+          else recordKeyPlisp key ++ ": ,@ " ++ exprToPlisp v
+        recordEntry (key, v)                = recordKeyPlisp key ++ ": " ++ exprToPlisp v
+exprToPlispSimple (Unquote e)         = "(, " ++ exprToPlisp e ++ ")"
+exprToPlispSimple (UnquoteSplice e)   = "(,@ " ++ exprToPlisp e ++ ")"
+
+-- | Variant used when the outer context is a quasiquote; emits (, e) and (,@ e) for unquote.
+exprToPlispQuasi :: Expr -> String
+exprToPlispQuasi (Unquote e)       = "(, " ++ exprToPlisp e ++ ")"
+exprToPlispQuasi (UnquoteSplice e) = "(,@ " ++ exprToPlisp e ++ ")"
+exprToPlispQuasi (List es)         = "(" ++ intercalate " " (map exprToPlispQuasi es) ++ ")"
+exprToPlispQuasi (Quote e)         = "'" ++ exprToPlisp e
+exprToPlispQuasi (ArrayLiteral es) = "[" ++ intercalate ", " (map exprToPlisp es) ++ "]"
+exprToPlispQuasi (SetLiteral es)   = "#{" ++ intercalate " " (map exprToPlisp es) ++ "}"
+exprToPlispQuasi (RecordLiteral ps)= "{" ++ intercalate ", " (map recordEntryQ ps) ++ "}"
+  where recordEntryQ (key, Unquote v)       = recordKeyPlisp key ++ ": , " ++ exprToPlisp v
+        recordEntryQ (key, UnquoteSplice v) = if null key
+          then ",@ " ++ exprToPlisp v
+          else recordKeyPlisp key ++ ": ,@ " ++ exprToPlisp v
+        recordEntryQ (key, v)               = recordKeyPlisp key ++ ": " ++ exprToPlispQuasi v
+exprToPlispQuasi e                 = exprToPlispSimple e
+
+-- | Serialize Value to plisp source. Emitted plisp must parse and evaluate to an equivalent value.
+-- Uses exprToPlisp for closure bodies. VPattern, VTaggedString, VRange, VMeasurement → Left.
+valueToPlispSource :: Value -> Either Error String
+valueToPlispSource (VInteger n)       = Right (show n)
+valueToPlispSource (VDecimal d)       = Right (show d)
+valueToPlispSource (VString s)        = Right ("\"" ++ escapeString s ++ "\"")
+valueToPlispSource (VBoolean b)       = Right (if b then "true" else "false")
+valueToPlispSource (VKeyword k)       = Right (k ++ ":")
+valueToPlispSource (VSymbol s)        = Right s
+valueToPlispSource (VArray vs)        = do
+  strs <- mapM valueToPlispSource vs
+  Right ("[" ++ intercalate ", " strs ++ "]")
+valueToPlispSource (VMap m) = do
+  strs <- mapM (\(k, v) -> do s <- valueToPlispSource v; return (recordKeyPlisp k ++ ": " ++ s)) (Map.toList m)
+  Right ("{" ++ intercalate ", " strs ++ "}")
+valueToPlispSource (VSet s) = do
+  strs <- mapM valueToPlispSource (Set.toList s)
+  Right ("#{" ++ intercalate " " strs ++ "}")
+valueToPlispSource (VClosure c) =
+  Right ("(lambda (" ++ intercalate " " (params c) ++ ") " ++ exprToPlisp (body c) ++ ")")
+valueToPlispSource (VPrimitive p)     = Right (primitiveName p)
+valueToPlispSource (VPattern _)       = Left (TypeMismatch "VPattern cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VTaggedString _ _)= Left (TypeMismatch "VTaggedString cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VRange _)         = Left (TypeMismatch "VRange cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VMeasurement _ _) = Left (TypeMismatch "VMeasurement cannot be serialized to plisp source" (VArray []))
 
 -- | Serializes a program (list of values) to Gram notation with file-level structure.
 -- Format:

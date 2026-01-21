@@ -4,17 +4,21 @@ import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Syntax
-import PatternLisp.FileLoader
+import PatternLisp.FileLoader (processFiles, loadPlispFile, deriveNameFromFilename, FileLoadResult(..))
 import PatternLisp.Gram
+import PatternLisp.Codec (programToGram)
 import System.IO
+import System.FilePath (replaceExtension)
 import System.Environment
 import System.Exit
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn, intercalate)
-import Data.Maybe (maybe)
+import Data.Maybe (maybe, fromMaybe)
 import Control.Applicative ((<|>))
+import Control.Monad (when)
+import Control.Exception (try, IOException)
 
 -- | Format a Value for display
 formatValue :: Value -> String
@@ -125,6 +129,52 @@ hasEvalFlag args = "-e" `elem` args || "--eval" `elem` args
 -- | Check if -h or --help flag is present
 hasHelpFlag :: [String] -> Bool
 hasHelpFlag args = "-h" `elem` args || "--help" `elem` args
+
+-- | Parse convert-mode args: --to-gram, --to-plisp, -o/--output, and positionals.
+-- Returns (toGram, toPlisp, outputPath, positionals).
+-- -o/--output consumes the next arg as the output path; first -o wins.
+parseConvertArgs :: [String] -> (Bool, Bool, Maybe FilePath, [FilePath])
+parseConvertArgs args = go args False False Nothing []
+  where
+    go [] g pl o ps = (g, pl, o, reverse ps)
+    go ("--to-gram" : r) g pl o ps = go r True pl o ps
+    go ("--to-plisp" : r) g pl o ps = go r g True o ps
+    go ("-o" : p : r) g pl o ps     = go r g pl (o <|> Just p) ps
+    go ("--output" : p : r) g pl o ps = go r g pl (o <|> Just p) ps
+    go ("-o" : []) g pl o ps        = go [] g pl (o <|> Just "") ps
+    go ("--output" : []) g pl o ps  = go [] g pl (o <|> Just "") ps
+    go (x : r) g pl o ps            = go r g pl o (x : ps)
+
+-- | Default output path for --to-gram: foo.plisp → foo.plisp.gram; else append .plisp.gram.
+defaultOutputToGram :: FilePath -> FilePath
+defaultOutputToGram p
+  | ".plisp" `isSuffixOf` p = replaceExtension p "plisp.gram"
+  | otherwise               = p ++ ".plisp.gram"
+
+-- | Default output path for --to-plisp: foo.gram or foo.plisp.gram → foo.plisp; else replace or append .plisp.
+-- replaceExtension only changes the final extension, so foo.plisp.gram would become foo.plisp.plisp;
+-- handle .plisp.gram explicitly.
+defaultOutputToPlisp :: FilePath -> FilePath
+defaultOutputToPlisp p
+  | ".plisp.gram" `isSuffixOf` p = take (length p - 11) p ++ ".plisp"
+  | otherwise                    = replaceExtension p "plisp"
+
+-- | Run --to-gram: load plisp, programToGram, write to output. On error: stderr, exit 1.
+runConvertToGram :: FilePath -> FilePath -> IO ()
+runConvertToGram inputPath outputPath = do
+  result <- loadPlispFile inputPath initialEnv
+  case result of
+    Left err -> do
+      hPutStrLn stderr (formatError err)
+      exitFailure
+    Right r -> do
+      let gram = programToGram [loadResultValue r] initialEnv
+      writeResult <- try (writeFile outputPath gram) :: IO (Either IOException ())
+      case writeResult of
+        Left err -> do
+          hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+          exitFailure
+        Right _ -> return ()
 
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
@@ -267,38 +317,64 @@ main = do
   if hasHelpFlag args
     then usage >> exitSuccess
     else do
-      -- Separate files from flags
-      let (files, flags) = parseArgs args
-          plispFiles = filter isPlisp files
-          gramFiles = filter isGram files
-          hasInteractive = hasInteractiveFlag args
-          hasEval = hasEvalFlag args
-      
-      case (files, hasInteractive, hasEval) of
-        -- No files: Interactive REPL
-        ([], False, False) -> repl initialEnv
-        
-        -- Both -i and -e specified: Error
-        (_, True, True) -> do
-          hPutStrLn stderr "Error: Cannot specify both -i and -e flags"
+      let (toGram, toPlisp, mOutput, positionals) = parseConvertArgs args
+
+      -- Convert mode: exactly one of --to-gram or --to-plisp
+      if toGram && toPlisp then do
+        hPutStrLn stderr "Error: cannot specify both --to-gram and --to-plisp"
+        usage
+        exitFailure
+      else if toGram || toPlisp then do
+        when (hasEvalFlag args || hasInteractiveFlag args) $ do
+          hPutStrLn stderr "Error: --to-gram/--to-plisp cannot be used with -e or -i"
           usage
           exitFailure
-        
-        -- -i flag: Interactive mode (load files, then REPL)
-        (_, True, False) -> do
-          envResult <- processFiles files initialEnv
-          case envResult of
-            Left err -> hPutStrLn stderr (formatError err) >> exitFailure
-            Right env -> repl env
-        
-        -- -e flag: Evaluate expression (after loading files)
-        (_, _, True) -> do
-          case extractEvalExpr args of
-            Nothing -> do
-              hPutStrLn stderr "Error: -e/--eval requires an expression argument"
-              usage
-              exitFailure
-            Just exprStr -> executeWithEval args exprStr
-        
-        -- Files with no flags: Default behavior - load files, eval and exit
-        (_, False, False) -> executeFiles files
+        when (mOutput == Just "") $ do
+          hPutStrLn stderr "Error: expected path after -o/--output"
+          usage
+          exitFailure
+        when (length positionals /= 1) $ do
+          hPutStrLn stderr "Error: convert mode requires exactly one input file"
+          usage
+          exitFailure
+        let inputPath = case positionals of [p] -> p; _ -> error "convert: expected 1 input"
+            outputPath = fromMaybe (if toGram then defaultOutputToGram inputPath else defaultOutputToPlisp inputPath) mOutput
+        if toGram then runConvertToGram inputPath outputPath else do
+          hPutStrLn stderr "Error: --to-plisp is not yet implemented"
+          exitFailure
+      else do
+        -- Separate files from flags (normal mode)
+        let (files, flags) = parseArgs args
+            plispFiles = filter isPlisp files
+            gramFiles = filter isGram files
+            hasInteractive = hasInteractiveFlag args
+            hasEval = hasEvalFlag args
+
+        case (files, hasInteractive, hasEval) of
+          -- No files: Interactive REPL
+          ([], False, False) -> repl initialEnv
+
+          -- Both -i and -e specified: Error
+          (_, True, True) -> do
+            hPutStrLn stderr "Error: Cannot specify both -i and -e flags"
+            usage
+            exitFailure
+
+          -- -i flag: Interactive mode (load files, then REPL)
+          (_, True, False) -> do
+            envResult <- processFiles files initialEnv
+            case envResult of
+              Left err -> hPutStrLn stderr (formatError err) >> exitFailure
+              Right env -> repl env
+
+          -- -e flag: Evaluate expression (after loading files)
+          (_, _, True) -> do
+            case extractEvalExpr args of
+              Nothing -> do
+                hPutStrLn stderr "Error: -e/--eval requires an expression argument"
+                usage
+                exitFailure
+              Just exprStr -> executeWithEval args exprStr
+
+          -- Files with no flags: Default behavior - load files, eval and exit
+          (_, False, False) -> executeFiles files

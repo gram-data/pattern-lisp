@@ -41,9 +41,9 @@
 
 **Checkpoint**: Foundation ready—US1 can start (US1 does not need valueToPlispSource); US2 and US3 need it.
 
-- [ ] T003 Implement `exprToPlisp :: Expr -> String` in `src/PatternLisp/Codec.hs` per data-model.md and contracts; support List, Quote, Atom, RecordLiteral, and other Expr forms the parser produces; ensure round-trip `parseExpr (exprToPlisp e) ≡ Right e` (or equivalent). Export from Codec.
+- [x] T003 Implement `exprToPlisp :: Expr -> String` in `src/PatternLisp/Codec.hs` per data-model.md and contracts; support List, Quote, Atom, RecordLiteral, and other Expr forms the parser produces; ensure round-trip `parseExpr (exprToPlisp e) ≡ Right e` (or equivalent). Export from Codec.
 
-- [ ] T004 Implement `valueToPlispSource :: Value -> Either Error String` in `src/PatternLisp/Codec.hs` per data-model.md and contracts; use `exprToPlisp` for closure bodies. Support VInteger, VString, VBoolean, VArray, VMap, VSet, VClosure, VKeyword, VDecimal, VSymbol, VPrimitive; VPattern may be `Left` or placeholder for now. Emit plisp that parses and evaluates to an equivalent value. Export from Codec.
+- [x] T004 Implement `valueToPlispSource :: Value -> Either Error String` in `src/PatternLisp/Codec.hs` per data-model.md and contracts; use `exprToPlisp` for closure bodies. Support VInteger, VString, VBoolean, VArray, VMap, VSet, VClosure, VKeyword, VDecimal, VSymbol, VPrimitive; VPattern may be `Left` or placeholder for now. Emit plisp that parses and evaluates to an equivalent value. Export from Codec.
 
 ---
 
@@ -55,15 +55,15 @@
 
 ### Tests for User Story 1 (TDD: write first, see them fail)
 
-- [ ] T005 [P] [US1] Create `test/PatternLisp/ConvertSpec.hs` with failing describe blocks for plisp→gram: valid `.plisp` converts and writes gram; default output path `foo.plisp` → `foo.plisp.gram`; invalid plisp reports error and no output; explicit `-o` is used.
+- [x] T005 [P] [US1] Create `test/PatternLisp/ConvertSpec.hs` with failing describe blocks for plisp→gram: valid `.plisp` converts and writes gram; default output path `foo.plisp` → `foo.plisp.gram`; invalid plisp reports error and no output; explicit `-o` is used.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] In `app/Main.hs`, parse `--to-gram`, `--to-plisp`, `-o`/`--output`, and one positional input; implement default output path for both ToGram (`foo.plisp` → `foo.plisp.gram`, else append `.plisp.gram`) and ToPlisp (`foo.gram`/`foo.plisp.gram` → `foo.plisp`, else replace or append `.plisp`) per research.md and contracts. T008 will enforce both/neither; T010 will use ToPlisp default.
+- [x] T006 [US1] In `app/Main.hs`, parse `--to-gram`, `--to-plisp`, `-o`/`--output`, and one positional input; implement default output path for both ToGram (`foo.plisp` → `foo.plisp.gram`, else append `.plisp.gram`) and ToPlisp (`foo.gram`/`foo.plisp.gram` → `foo.plisp`, else replace or append `.plisp`) per research.md and contracts. T008 will enforce both/neither; T010 will use ToPlisp default.
 
-- [ ] T007 [US1] In `app/Main.hs`, implement `--to-gram` flow: `loadPlispFile` with `initialEnv`, on success `programToGram [loadResultValue] env`, write to output path; on parse/eval error, stderr and exit 1. Import `PatternLisp.Codec` for `programToGram`; use `PatternLisp.FileLoader.loadPlispFile`.
+- [x] T007 [US1] In `app/Main.hs`, implement `--to-gram` flow: `loadPlispFile` with `initialEnv`, on success `programToGram [loadResultValue] env`, write to output path; on parse/eval error, stderr and exit 1. Import `PatternLisp.Codec` for `programToGram`; use `PatternLisp.FileLoader.loadPlispFile`.
 
-- [ ] T008 [US1] In `app/Main.hs`, enforce convert-mode rules: exactly one of `--to-gram` or `--to-plisp`; mutually exclusive with `-e`/`-i` and with “load files and eval”; exactly one input file; on violation print usage to stderr and exit 1.
+- [x] T008 [US1] In `app/Main.hs`, enforce convert-mode rules: exactly one of `--to-gram` or `--to-plisp`; mutually exclusive with `-e`/`-i` and with “load files and eval”; exactly one input file; on violation print usage to stderr and exit 1.
 
 **Checkpoint**: `pattern-lisp --to-gram script.plisp` works; ConvertSpec plisp→gram tests pass.
 
