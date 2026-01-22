@@ -3,18 +3,18 @@ packages: .
 source-repository-package
   type: git
   location: https://github.com/gram-data/gram-hs
-  tag: main
+  commit: 4a758417c8efcdce71d81706123f7c5f65568aff
   subdir: libs/subject
 
 source-repository-package
   type: git
   location: https://github.com/gram-data/gram-hs
-  tag: main
+  commit: 4a758417c8efcdce71d81706123f7c5f65568aff
   subdir: libs/pattern
 
 source-repository-package
   type: git
   location: https://github.com/gram-data/gram-hs
-  tag: main
+  commit: 4a758417c8efcdce71d81706123f7c5f65568aff
   subdir: libs/gram
 
