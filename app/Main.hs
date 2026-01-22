@@ -6,7 +6,7 @@ import PatternLisp.Primitives
 import PatternLisp.Syntax
 import PatternLisp.FileLoader (processFiles, loadPlispFile, deriveNameFromFilename, FileLoadResult(..))
 import PatternLisp.Gram
-import PatternLisp.Codec (programToGram)
+import PatternLisp.Codec (programToGram, gramToProgram, valueToPlispSource)
 import System.IO
 import System.FilePath (replaceExtension)
 import System.Environment
@@ -176,6 +176,40 @@ runConvertToGram inputPath outputPath = do
           exitFailure
         Right _ -> return ()
 
+-- | Run --to-plisp: load gram, gramToProgram, valueToPlispSource, write to output. On error: stderr, exit 1.
+runConvertToPlisp :: FilePath -> FilePath -> IO ()
+runConvertToPlisp inputPath outputPath = do
+  readResult <- try (readFile inputPath) :: IO (Either IOException String)
+  case readResult of
+    Left err -> do
+      hPutStrLn stderr $ "Error: Could not read input file: " ++ show err
+      exitFailure
+    Right gramText -> do
+      case gramToProgram gramText of
+        Left err -> do
+          hPutStrLn stderr (formatError err)
+          exitFailure
+        Right (values, _) -> do
+          case mapM valueToPlispSource values of
+            Left err -> do
+              hPutStrLn stderr (formatError err)
+              exitFailure
+            Right plispStrs -> do
+              if null plispStrs
+                then do
+                  hPutStrLn stderr "Error: Gram file contains no value patterns (only metadata)"
+                  exitFailure
+                else do
+                  let plisp = case plispStrs of
+                                [single] -> single
+                                _        -> "(begin " ++ intercalate " " plispStrs ++ ")"
+                  writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
+                  case writeResult of
+                    Left err -> do
+                      hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+                      exitFailure
+                    Right _ -> return ()
+
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
 processLine input env
@@ -339,9 +373,7 @@ main = do
           exitFailure
         let inputPath = case positionals of [p] -> p; _ -> error "convert: expected 1 input"
             outputPath = fromMaybe (if toGram then defaultOutputToGram inputPath else defaultOutputToPlisp inputPath) mOutput
-        if toGram then runConvertToGram inputPath outputPath else do
-          hPutStrLn stderr "Error: --to-plisp is not yet implemented"
-          exitFailure
+        if toGram then runConvertToGram inputPath outputPath else runConvertToPlisp inputPath outputPath
       else do
         -- Separate files from flags (normal mode)
         let (files, flags) = parseArgs args

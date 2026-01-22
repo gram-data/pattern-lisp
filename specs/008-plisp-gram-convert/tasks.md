@@ -77,13 +77,13 @@
 
 ### Tests for User Story 2 (TDD: write first, see them fail)
 
-- [ ] T009 [US2] Add failing describe blocks in `test/PatternLisp/ConvertSpec.hs` for gram→plisp: valid pattern-lisp gram converts to `(begin ...)`; default output `foo.plisp.gram` → `foo.plisp`; gram missing `kind: "Pattern Lisp"` or invalid value patterns yields clear error and no output.
+- [x] T009 [US2] Add failing describe blocks in `test/PatternLisp/ConvertSpec.hs` for gram→plisp: valid pattern-lisp gram converts to `(begin ...)`; default output `foo.plisp.gram` → `foo.plisp`; gram missing `kind: "Pattern Lisp"` or invalid value patterns yields clear error and no output.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] In `app/Main.hs`, implement `--to-plisp` flow: read file, `gramToProgram`, `mapM valueToPlispSource` on `[Value]`, join as `(begin v1 v2 ...)`, write to output path. Use default output from T006 when `-o` is omitted. Import `PatternLisp.Codec` for `gramToProgram`, `valueToPlispSource`.
+- [x] T010 [US2] In `app/Main.hs`, implement `--to-plisp` flow: read file, `gramToProgram`, `mapM valueToPlispSource` on `[Value]`, join as `(begin v1 v2 ...)`, write to output path. Use default output from T006 when `-o` is omitted. Import `PatternLisp.Codec` for `gramToProgram`, `valueToPlispSource`.
 
-- [ ] T011 [US2] Ensure gram→plisp reports a clear error when `gramToProgram` returns `Left` (gram parse error, missing `kind: "Pattern Lisp"`, or `patternSubjectToValue` failure). Verify or update error messages in `src/PatternLisp/Codec.hs` and/or `app/Main.hs` to satisfy FR-008 and contracts.
+- [x] T011 [US2] Ensure gram→plisp reports a clear error when `gramToProgram` returns `Left` (gram parse error, missing `kind: "Pattern Lisp"`, or `patternSubjectToValue` failure). Verify or update error messages in `src/PatternLisp/Codec.hs` and/or `app/Main.hs` to satisfy FR-008 and contracts.
 
 **Checkpoint**: `pattern-lisp --to-plisp program.plisp.gram` works; gram-not-program fails with clear message; ConvertSpec gram→plisp tests pass.
 

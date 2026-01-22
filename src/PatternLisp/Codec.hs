@@ -1564,9 +1564,9 @@ exprToPlispQuasi :: Expr -> String
 exprToPlispQuasi (Unquote e)       = "(, " ++ exprToPlisp e ++ ")"
 exprToPlispQuasi (UnquoteSplice e) = "(,@ " ++ exprToPlisp e ++ ")"
 exprToPlispQuasi (List es)         = "(" ++ intercalate " " (map exprToPlispQuasi es) ++ ")"
-exprToPlispQuasi (Quote e)         = "'" ++ exprToPlisp e
-exprToPlispQuasi (ArrayLiteral es) = "[" ++ intercalate ", " (map exprToPlisp es) ++ "]"
-exprToPlispQuasi (SetLiteral es)   = "#{" ++ intercalate " " (map exprToPlisp es) ++ "}"
+exprToPlispQuasi (Quote e)         = "'" ++ exprToPlispQuasi e
+exprToPlispQuasi (ArrayLiteral es) = "[" ++ intercalate ", " (map exprToPlispQuasi es) ++ "]"
+exprToPlispQuasi (SetLiteral es)   = "#{" ++ intercalate " " (map exprToPlispQuasi es) ++ "}"
 exprToPlispQuasi (RecordLiteral ps)= "{" ++ intercalate ", " (map recordEntryQ ps) ++ "}"
   where recordEntryQ (key, Unquote v)       = recordKeyPlisp key ++ ": , " ++ exprToPlisp v
         recordEntryQ (key, UnquoteSplice v) = if null key

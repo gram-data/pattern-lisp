@@ -15,7 +15,19 @@ runPatternLisp args = readProcessWithExitCode "cabal" (["run", "pattern-lisp", "
 
 -- | Default output path for --to-gram: foo.plisp → foo.plisp.gram; else append .plisp.gram.
 defaultOutputToGram :: FilePath -> FilePath
-defaultOutputToGram p = replaceExtension p "plisp.gram"
+defaultOutputToGram p
+  | isSuffixOf ".plisp" p = replaceExtension p "plisp.gram"
+  | otherwise               = p ++ ".plisp.gram"
+
+-- | Default output path for --to-plisp: foo.gram or foo.plisp.gram → foo.plisp; else replace or append .plisp.
+defaultOutputToPlisp :: FilePath -> FilePath
+defaultOutputToPlisp p
+  | isSuffixOf ".plisp.gram" p = take (length p - 11) p ++ ".plisp"
+  | otherwise                    = replaceExtension p "plisp"
+
+-- | Helper to check if a string is a suffix of another.
+isSuffixOf :: String -> String -> Bool
+isSuffixOf suffix s = reverse suffix == take (length suffix) (reverse s)
 
 spec :: Spec
 spec = describe "Convert (plisp↔gram)" $ do
@@ -65,4 +77,49 @@ spec = describe "Convert (plisp↔gram)" $ do
       ec `shouldBe` ExitSuccess
       exists <- doesFileExist custom
       exists `shouldBe` True
+      removePathForcibly tmp
+
+  describe "gram→plisp" $ do
+    it "valid pattern-lisp gram converts to (begin ...)" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "program.plisp.gram"
+          outPlisp = defaultOutputToPlisp gram
+      writeFile gram "{ kind: \"Pattern Lisp\" }\n[:Number {value: 42}]\n[:String {value: \"hello\"}]"
+      (ec, _stdout, _stderr) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldBe` ExitSuccess
+      exists <- doesFileExist outPlisp
+      exists `shouldBe` True
+      content <- readFile outPlisp
+      content `shouldBe` "(begin 42 \"hello\")"
+      removePathForcibly tmp
+
+    it "default output foo.plisp.gram → foo.plisp" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "foo.plisp.gram"
+          expected = tmp </> "foo.plisp"
+      writeFile gram "{ kind: \"Pattern Lisp\" }\n[:Number {value: 1}]"
+      (ec, _, _) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldBe` ExitSuccess
+      exists <- doesFileExist expected
+      exists `shouldBe` True
+      removePathForcibly tmp
+
+    it "gram missing kind: \"Pattern Lisp\" yields clear error" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "not-program.gram"
+          wouldBeOut = defaultOutputToPlisp gram
+      writeFile gram "{ kind: \"Not Pattern Lisp\" }\n[:Number {value: 1}]"
+      (ec, _, stderr) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldSatisfy` \c -> c /= ExitSuccess
+      stderr `shouldContain` "kind: Pattern Lisp"
+      exists <- doesFileExist wouldBeOut
+      exists `shouldBe` False
+      removePathForcibly tmp
+
+    it "invalid value patterns yield clear error" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "bad-values.gram"
+      writeFile gram "{ kind: \"Pattern Lisp\" }\n[:Unknown {what: 1}]"
+      (ec, _, _) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldSatisfy` \c -> c /= ExitSuccess
       removePathForcibly tmp
