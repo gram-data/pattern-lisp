@@ -97,11 +97,11 @@
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] Add failing describe blocks in `test/PatternLisp/ConvertSpec.hs` for `.plisp.gram`: plisp→gram default output is `*.plisp.gram`; gram→plisp with `*.plisp.gram` input uses `*.plisp` as default output and converts successfully.
+- [x] T012 [P] [US3] Add failing describe blocks in `test/PatternLisp/ConvertSpec.hs` for `.plisp.gram`: plisp→gram default output is `*.plisp.gram`; gram→plisp with `*.plisp.gram` input uses `*.plisp` as default output and converts successfully.
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] Verify default output in `app/Main.hs` produces `*.plisp.gram` for `--to-gram` and `*.plisp` for `--to-plisp` when input is `*.plisp.gram` or `*.gram`; fix if not. Help text for `.plisp.gram` is in T015.
+- [x] T013 [US3] Verify default output in `app/Main.hs` produces `*.plisp.gram` for `--to-gram` and `*.plisp` for `--to-plisp` when input is `*.plisp.gram` or `*.gram`; fix if not. Help text for `.plisp.gram` is in T015.
 
 **Checkpoint**: .plisp.gram convention works and is tested; help mentions it.
 

@@ -123,3 +123,48 @@ spec = describe "Convert (plisp↔gram)" $ do
       (ec, _, _) <- runPatternLisp ["--to-plisp", gram]
       ec `shouldSatisfy` \c -> c /= ExitSuccess
       removePathForcibly tmp
+
+  describe ".plisp.gram convention" $ do
+    it "plisp→gram default output is *.plisp.gram" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let plisp = tmp </> "example.plisp"
+          expected = tmp </> "example.plisp.gram"
+          notExpected = tmp </> "example.gram"
+      writeFile plisp "(+ 1 2)"
+      (ec, _, _) <- runPatternLisp ["--to-gram", plisp]
+      ec `shouldBe` ExitSuccess
+      exists <- doesFileExist expected
+      exists `shouldBe` True
+      notExists <- doesFileExist notExpected
+      notExists `shouldBe` False
+      removePathForcibly tmp
+
+    it "gram→plisp with *.plisp.gram input uses *.plisp as default output and converts successfully" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "example.plisp.gram"
+          expected = tmp </> "example.plisp"
+          notExpected = tmp </> "example.plisp.gram.plisp"
+      writeFile gram "{ kind: \"Pattern Lisp\" }\n[:Number {value: 42}]\n[:String {value: \"test\"}]"
+      (ec, _, _) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldBe` ExitSuccess
+      exists <- doesFileExist expected
+      exists `shouldBe` True
+      notExists <- doesFileExist notExpected
+      notExists `shouldBe` False
+      content <- readFile expected
+      content `shouldBe` "(begin 42 \"test\")"
+      removePathForcibly tmp
+
+    it "gram→plisp with *.gram input (not *.plisp.gram) uses *.plisp as default output" $ do
+      tmp <- getTemporaryDirectory >>= \d -> createTempDirectory d "convert_"
+      let gram = tmp </> "example.gram"
+          expected = tmp </> "example.plisp"
+      writeFile gram "{ kind: \"Pattern Lisp\" }\n[:Number {value: 100}]"
+      (ec, _, _) <- runPatternLisp ["--to-plisp", gram]
+      ec `shouldBe` ExitSuccess
+      exists <- doesFileExist expected
+      exists `shouldBe` True
+      content <- readFile expected
+      -- Single value is output without (begin ...), multiple values use (begin ...)
+      content `shouldBe` "100"
+      removePathForcibly tmp
