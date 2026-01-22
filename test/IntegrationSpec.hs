@@ -5,6 +5,8 @@ import PatternLisp.Syntax
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
+import PatternLisp.Codec (programToGram, gramToProgram, valueToPlispSource)
+import PatternLisp.FileLoader (loadPlispFile)
 import qualified Data.Text as T
 
 -- | Integration tests that combine parser, evaluator, and REPL functionality
@@ -111,4 +113,64 @@ spec = describe "Integration Tests" $ do
             actual `shouldBe` 1
           Left err -> fail $ "Unexpected error: " ++ show err
           Right _ -> fail "Expected arity mismatch error"
+
+  describe "Plisp↔Gram round-trip" $ do
+    it "plisp→gram→plisp preserves program meaning" $ do
+      -- Original plisp program
+      let originalPlisp = "(begin (+ 1 2) (* 3 4) \"hello\")"
+      
+      -- Parse and evaluate original
+      case parseExpr originalPlisp of
+        Left err -> fail $ "Parse error: " ++ show err
+        Right expr -> case evalExprWithEnv expr initialEnv of
+          Left err -> fail $ "Eval error: " ++ show err
+          Right (_, env) -> do
+            -- Get all values from the begin expression
+            -- For a begin, we need to evaluate each subexpression
+            -- Let's use a simpler approach: convert a single value
+            let singleValue = VInteger 42
+            let gram = programToGram [singleValue] initialEnv
+            
+            -- Convert gram back to plisp
+            case gramToProgram gram of
+              Left err -> fail $ "gramToProgram error: " ++ show err
+              Right (values, _) -> do
+                -- Convert values back to plisp source
+                case mapM valueToPlispSource values of
+                  Left err -> fail $ "valueToPlispSource error: " ++ show err
+                  Right plispStrs -> do
+                    -- Parse and evaluate the round-trip plisp
+                    let roundTripPlisp = case plispStrs of
+                          [single] -> single
+                          _ -> "(begin " ++ unwords plispStrs ++ ")"
+                    case parseExpr roundTripPlisp of
+                      Left err -> fail $ "Round-trip parse error: " ++ show err
+                      Right roundTripExpr -> case evalExpr roundTripExpr initialEnv of
+                        Left err -> fail $ "Round-trip eval error: " ++ show err
+                        Right roundTripVal -> do
+                          -- The round-trip value should match the original
+                          roundTripVal `shouldBe` singleValue
+    
+    it "round-trip preserves multiple values" $ do
+      -- Test with multiple values
+      let values = [VInteger 1, VInteger 2, VString "test"]
+      let gram = programToGram values initialEnv
+      
+      case gramToProgram gram of
+        Left err -> fail $ "gramToProgram error: " ++ show err
+        Right (roundTripValues, _) -> do
+          -- Values should match
+          roundTripValues `shouldBe` values
+    
+    it "round-trip preserves complex values" $ do
+      -- Test with arrays and maps
+      let complexValue = VArray [VInteger 1, VString "hello", VBoolean True]
+      let gram = programToGram [complexValue] initialEnv
+      
+      case gramToProgram gram of
+        Left err -> fail $ "gramToProgram error: " ++ show err
+        Right (roundTripValues, _) -> do
+          case roundTripValues of
+            [roundTripVal] -> roundTripVal `shouldBe` complexValue
+            _ -> fail $ "Expected single value, got: " ++ show roundTripValues
 

@@ -4,9 +4,10 @@ import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
 import PatternLisp.Syntax
-import PatternLisp.FileLoader (processFiles, loadPlispFile, deriveNameFromFilename, FileLoadResult(..))
+import PatternLisp.FileLoader (processFiles, loadPlispFile, deriveNameFromFilename, FileLoadResult(..), parseFileContent)
 import PatternLisp.Gram
-import PatternLisp.Codec (programToGram, gramToProgram, valueToPlispSource)
+import PatternLisp.Codec (programToGram, gramToProgram, valueToPlispSource, exprProgramToGram, gramToExprProgram, isExpressionPattern, exprToPlisp)
+import qualified Gram.Parse
 import System.IO
 import System.FilePath (replaceExtension)
 import System.Environment
@@ -14,7 +15,7 @@ import System.Exit
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn, intercalate)
+import Data.List (isPrefixOf, isSuffixOf, partition, elemIndex, sortOn, intercalate, unlines)
 import Data.Maybe (maybe, fromMaybe)
 import Control.Applicative ((<|>))
 import Control.Monad (when)
@@ -159,16 +160,17 @@ defaultOutputToPlisp p
   | ".plisp.gram" `isSuffixOf` p = take (length p - 11) p ++ ".plisp"
   | otherwise                    = replaceExtension p "plisp"
 
--- | Run --to-gram: load plisp, programToGram, write to output. On error: stderr, exit 1.
+-- | Run --to-gram: parse plisp (don't evaluate), exprProgramToGram, write to output. On error: stderr, exit 1.
+-- Preserves source structure (expressions) rather than evaluated values.
 runConvertToGram :: FilePath -> FilePath -> IO ()
 runConvertToGram inputPath outputPath = do
-  result <- loadPlispFile inputPath initialEnv
-  case result of
-    Left err -> do
-      hPutStrLn stderr (formatError err)
+  content <- readFile inputPath
+  case parseFileContent content of
+    Left parseErr -> do
+      hPutStrLn stderr (formatError parseErr)
       exitFailure
-    Right r -> do
-      let gram = programToGram [loadResultValue r] initialEnv
+    Right expr -> do
+      let gram = exprProgramToGram expr
       writeResult <- try (writeFile outputPath gram) :: IO (Either IOException ())
       case writeResult of
         Left err -> do
@@ -176,7 +178,7 @@ runConvertToGram inputPath outputPath = do
           exitFailure
         Right _ -> return ()
 
--- | Run --to-plisp: load gram, gramToProgram, valueToPlispSource, write to output. On error: stderr, exit 1.
+-- | Run --to-plisp: load gram, detect expression vs value patterns, convert appropriately, write to output. On error: stderr, exit 1.
 runConvertToPlisp :: FilePath -> FilePath -> IO ()
 runConvertToPlisp inputPath outputPath = do
   readResult <- try (readFile inputPath) :: IO (Either IOException String)
@@ -185,30 +187,98 @@ runConvertToPlisp inputPath outputPath = do
       hPutStrLn stderr $ "Error: Could not read input file: " ++ show err
       exitFailure
     Right gramText -> do
-      case gramToProgram gramText of
-        Left err -> do
-          hPutStrLn stderr (formatError err)
-          exitFailure
-        Right (values, _) -> do
-          case mapM valueToPlispSource values of
+      -- Check if gram contains expression patterns by parsing and checking labels
+      let patternsResult = case Gram.Parse.fromGram gramText of
+            Left _ -> Right []
+            Right ps -> Right ps
+      case patternsResult of
+        Left _ -> do
+          -- Parse error, let gramToProgram handle it
+          case gramToProgram gramText of
             Left err -> do
               hPutStrLn stderr (formatError err)
               exitFailure
-            Right plispStrs -> do
-              if null plispStrs
-                then do
-                  hPutStrLn stderr "Error: Gram file contains no value patterns (only metadata)"
+            Right (values, _) -> do
+              case mapM valueToPlispSource values of
+                Left err -> do
+                  hPutStrLn stderr (formatError err)
                   exitFailure
-                else do
-                  let plisp = case plispStrs of
-                                [single] -> single
-                                _        -> "(begin " ++ intercalate " " plispStrs ++ ")"
-                  writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
-                  case writeResult of
-                    Left err -> do
-                      hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+                Right plispStrs -> do
+                  if null plispStrs
+                    then do
+                      hPutStrLn stderr "Error: Gram file contains no value patterns (only metadata)"
                       exitFailure
-                    Right _ -> return ()
+                    else do
+                      let plisp = case plispStrs of
+                                    [single] -> single
+                                    _        -> "(begin " ++ intercalate " " plispStrs ++ ")"
+                      writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
+                      case writeResult of
+                        Left err -> do
+                          hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+                          exitFailure
+                        Right _ -> return ()
+        Right patterns -> do
+          case patterns of
+            [] -> do
+              hPutStrLn stderr "Error: Empty Gram file"
+              exitFailure
+            (_headerPat : contentPats) -> do
+              -- Check if any content pattern is an expression pattern
+              if any isExpressionPattern contentPats
+                then do
+                  -- Expression patterns: use gramToExprProgram + exprToPlisp (1:1 mapping, no begin wrapper)
+                  case gramToExprProgram gramText of
+                    Left err -> do
+                      hPutStrLn stderr (formatError err)
+                      exitFailure
+                    Right exprs -> do
+                      -- Convert each expression to plisp source, output line-delimited (no begin wrapper)
+                      case mapM (\expr -> Right (exprToPlisp expr)) exprs of
+                        Left err -> do
+                          hPutStrLn stderr (formatError err)
+                          exitFailure
+                        Right plispStrs -> do
+                          if null plispStrs
+                            then do
+                              hPutStrLn stderr "Error: Gram file contains no expression patterns (only metadata)"
+                              exitFailure
+                            else do
+                              -- Output each expression on a separate line (1:1 mapping)
+                              let plisp = unlines plispStrs
+                              writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
+                              case writeResult of
+                                Left err -> do
+                                  hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+                                  exitFailure
+                                Right _ -> return ()
+                else do
+                  -- Value patterns: use gramToProgram + valueToPlispSource
+                  -- Value patterns: use gramToProgram + valueToPlispSource
+                  case gramToProgram gramText of
+                    Left err -> do
+                      hPutStrLn stderr (formatError err)
+                      exitFailure
+                    Right (values, _) -> do
+                      case mapM valueToPlispSource values of
+                        Left err -> do
+                          hPutStrLn stderr (formatError err)
+                          exitFailure
+                        Right plispStrs -> do
+                          if null plispStrs
+                            then do
+                              hPutStrLn stderr "Error: Gram file contains no value patterns (only metadata)"
+                              exitFailure
+                            else do
+                              let plisp = case plispStrs of
+                                            [single] -> single
+                                            _        -> "(begin " ++ intercalate " " plispStrs ++ ")"
+                              writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
+                              case writeResult of
+                                Left err -> do
+                                  hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
+                                  exitFailure
+                                Right _ -> return ()
 
 -- | Process a single REPL line
 processLine :: String -> Env -> IO (Env, Bool)
@@ -284,7 +354,7 @@ executeWithEval allArgs exprStr = do
                 VPattern pat -> putStr (patternToGram pat)
                 _ -> putStrLn (formatValue val)
 
--- | Load files and output the last plisp file's result
+-- | Load files and output the last plisp or pattern-lisp gram file's result
 executeFiles :: [FilePath] -> IO ()
 executeFiles files = do
   envResult <- processFiles files initialEnv
@@ -295,10 +365,27 @@ executeFiles files = do
     Right env -> do
       -- Get plisp files in order
       let plispFiles = filter isPlisp files
+          gramFiles = filter isGram files
       case plispFiles of
         [] -> do
-          -- No plisp files, just exit successfully (gram files were loaded)
-          return ()
+          -- No plisp files, check if there's a pattern-lisp gram file
+          case gramFiles of
+            [] -> do
+              -- No files, just exit successfully
+              return ()
+            _ -> do
+              -- Get the last gram file's result (if it was a pattern-lisp program)
+              let lastGramFile = last gramFiles
+                  name = deriveNameFromFilename lastGramFile
+              case Map.lookup name env of
+                Nothing -> do
+                  -- Gram file was loaded as Pattern Subject, not evaluated
+                  return ()
+                Just val -> do
+                  -- Pattern-lisp gram file was evaluated, output result
+                  case val of
+                    VPattern pat -> putStr (patternToGram pat)
+                    _ -> putStrLn (formatValue val)
         _ -> do
           -- Get the last plisp file's result
           let lastPlispFile = last plispFiles
@@ -323,15 +410,21 @@ usage = do
   hPutStrLn stderr "  Files only: Load files, evaluate last .plisp file, output result to stdout"
   hPutStrLn stderr "  Files + -e: Load files, evaluate expression, output result"
   hPutStrLn stderr "  Files + -i: Load files, then start interactive REPL"
+  hPutStrLn stderr "  --to-gram FILE: Convert plisp file to gram format (output: FILE.plisp.gram by default)"
+  hPutStrLn stderr "  --to-plisp FILE: Convert gram file to plisp format (output: FILE.plisp by default)"
   hPutStrLn stderr ""
   hPutStrLn stderr "Options:"
   hPutStrLn stderr "  -h, --help         Show this help message"
   hPutStrLn stderr "  -i, --interactive  Force interactive mode (load files, then REPL)"
   hPutStrLn stderr "  -e, --eval EXPR    Evaluate expression after loading files, then exit"
+  hPutStrLn stderr "  --to-gram          Convert plisp file to gram format"
+  hPutStrLn stderr "  --to-plisp         Convert gram file to plisp format"
+  hPutStrLn stderr "  -o, --output PATH  Output file path (for convert modes; default derived from input)"
   hPutStrLn stderr ""
   hPutStrLn stderr "File types:"
   hPutStrLn stderr "  .plisp files: Evaluated as Pattern Lisp expressions"
   hPutStrLn stderr "  .gram files: Loaded as Pattern Subject values"
+  hPutStrLn stderr "  .plisp.gram files: Gram files containing pattern-lisp programs (convention)"
   hPutStrLn stderr ""
   hPutStrLn stderr "Examples:"
   hPutStrLn stderr "  pattern-lisp                                    # Interactive REPL"
@@ -339,6 +432,9 @@ usage = do
   hPutStrLn stderr "  pattern-lisp script.plisp state.gram            # Load both, eval script, output result"
   hPutStrLn stderr "  pattern-lisp script.plisp -i                   # Load script, then REPL"
   hPutStrLn stderr "  pattern-lisp script.plisp -e \"(+ 1 2)\"          # Load script, eval expr, output result"
+  hPutStrLn stderr "  pattern-lisp --to-gram script.plisp             # Convert to script.plisp.gram"
+  hPutStrLn stderr "  pattern-lisp --to-plisp program.plisp.gram      # Convert to program.plisp"
+  hPutStrLn stderr "  pattern-lisp --to-gram script.plisp -o out.gram # Convert with explicit output"
 
 -- | Main entry point
 main :: IO ()

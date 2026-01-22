@@ -13,7 +13,7 @@
 {}
 
 ;; Records with different value types
-{name: "Bob", age: 25, score: 95.5, tags: ["developer", "senior"]}
+{name: "Bob", age: 25, score: 95, tags: ["developer", "senior"]}
 
 ;; ============================================================================
 ;; Record Operations

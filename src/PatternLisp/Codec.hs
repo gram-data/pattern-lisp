@@ -61,6 +61,14 @@ module PatternLisp.Codec
   -- Plisp source serialization (008-plisp-gram-convert)
   , exprToPlisp
   , valueToPlispSource
+  -- Expression to gram (preserves source structure)
+  , exprProgramToGram
+  -- Gram to expression program (for round-trip)
+  , gramToExprProgram
+  -- Check if pattern is an expression pattern
+  , isExpressionPattern
+  -- Extract expressions from Expr (unwrap begin)
+  , extractExpressions
   ) where
 
 import PatternLisp.Syntax
@@ -1624,15 +1632,76 @@ programToGram values _runtimeEnv =
       -- toGram accepts [Pattern Subject] and produces newline-separated output
   in toGram (fileMetadata : valuePatterns)
 
+-- | Extracts individual expressions from an Expr, unwrapping begin if present.
+-- Returns a list of expressions (1:1 mapping, no begin wrapper).
+extractExpressions :: Expr -> [Expr]
+extractExpressions (List (Atom (Symbol "begin") : exprs)) = exprs
+extractExpressions expr = [expr]
+
+-- | Serializes an expression program to Gram notation with file-level structure.
+-- Preserves the source structure (expressions) rather than evaluated values.
+-- If input is (begin e1 e2 ...), extracts e1, e2, ... and stores as separate patterns.
+-- Format:
+--   { kind: "Pattern Lisp" }
+--   exprPattern1
+--   exprPattern2
+--   ...
+-- where each exprPattern is an Expr converted to Pattern Subject.
+exprProgramToGram :: Expr -> String
+exprProgramToGram expr =
+  -- Create file-level property record pattern
+  let fileMetadata = pattern
+        (Subject
+          { identity = SubjectCore.Symbol ""
+          , labels = Set.empty
+          , properties = Map.fromList [("kind", SubjectValue.VString "Pattern Lisp")]
+          })
+        []
+      -- Extract individual expressions (unwrap begin if present)
+      exprs = extractExpressions expr
+      -- Convert each expression to Pattern Subject
+      exprPatterns = map exprToPatternSubjectPure exprs
+      -- Combine file metadata with expression patterns
+      -- toGram accepts [Pattern Subject] and produces newline-separated output
+  in toGram (fileMetadata : exprPatterns)
+
+-- | Checks if a pattern represents an expression (has expression labels like :List, :Begin, etc.)
+-- vs a value (has value labels like :Number, :String, etc.)
+isExpressionPattern :: Pattern Subject -> Bool
+isExpressionPattern pat =
+  let lbls = labels (PatternCore.value pat)
+      exprLabels = Set.fromList ["List", "Begin", "If", "Let", "Define", "Quote"]
+  in not (Set.null (Set.intersection lbls exprLabels))
+
+-- | Deserializes Gram notation to a list of expressions (1:1 mapping, no begin wrapper).
+-- Similar to gramToProgram but returns [Expr] instead of [Value].
+-- Used for round-trip when gram contains expression patterns.
+gramToExprProgram :: String -> Either Error [Expr]
+gramToExprProgram gramText = do
+  patterns <- case fromGram gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right ps -> Right ps
+  case patterns of
+    [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
+    (headerPat : contentPats) -> do
+      let headerSubj = PatternCore.value headerPat
+          kindProp = Map.lookup "kind" (properties headerSubj)
+      case kindProp of
+        Just (SubjectValue.VString "Pattern Lisp") -> do
+          -- Convert each pattern to Expr (1:1 mapping, no begin wrapper)
+          mapM patternSubjectToExpr contentPats
+        _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
+
 -- | Deserializes Gram notation to a program (list of values and environment).
 -- Follows the gram document model: one document → fromGram → [Pattern];
--- first pattern is the header (require kind: "Pattern Lisp"); rest are value patterns.
+-- first pattern is the header (require kind: "Pattern Lisp"); rest are value or expression patterns.
 -- Expects format:
 --   { kind: "Pattern Lisp" }
 --   expr1
 --   expr2
 --   ...
 -- Note: No separate Environment section - scopes are inlined in :Scope patterns
+-- Handles both expression patterns (from exprProgramToGram) and value patterns (from programToGram).
 gramToProgram :: String -> Either Error ([Value], Env)
 gramToProgram gramText = do
   patterns <- case fromGram gramText of
@@ -1640,12 +1709,14 @@ gramToProgram gramText = do
     Right ps -> Right ps
   case patterns of
     [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
-    (headerPat : valuePats) -> do
+    (headerPat : contentPats) -> do
       let headerSubj = PatternCore.value headerPat
           kindProp = Map.lookup "kind" (properties headerSubj)
       case kindProp of
         Just (SubjectValue.VString "Pattern Lisp") -> do
-          values <- mapM patternSubjectToValue valuePats
+          -- Value patterns: convert directly to Values
+          -- Note: Expression patterns should be handled via gramToExprProgram + evaluation in Main.hs
+          values <- mapM patternSubjectToValue contentPats
           Right (values, initialEnv)
         _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
 

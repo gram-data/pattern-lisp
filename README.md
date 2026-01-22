@@ -128,7 +128,61 @@ See [Quickstart Guide](specs/002-core-lisp-evaluator/quickstart.md) for detailed
 - **GHC**: 9.6.3 (or compatible version)
 - **Git**: For dependency resolution (gram-hs from GitHub)
 
-### Initial Setup
+### Installation
+
+To install `pattern-lisp` as a local command-line tool:
+
+1. **Update Cabal index**:
+   ```bash
+   cabal update
+   ```
+
+2. **Install the executable**:
+   ```bash
+   cabal install exe:pattern-lisp
+   ```
+   
+   Or using the v2-install command:
+   ```bash
+   cabal v2-install exe:pattern-lisp
+   ```
+   
+   This installs the executable to `~/.cabal/bin/pattern-lisp` by default.
+
+3. **Add to PATH** (if not already):
+   ```bash
+   # Add to your ~/.zshrc or ~/.bashrc
+   export PATH="$HOME/.cabal/bin:$PATH"
+   ```
+   
+   Then reload your shell configuration:
+   ```bash
+   source ~/.zshrc  # or source ~/.bashrc
+   ```
+
+4. **Verify installation**:
+   ```bash
+   pattern-lisp --help
+   ```
+
+After installation, you can use `pattern-lisp` directly:
+```bash
+# Start interactive REPL
+pattern-lisp
+
+# Execute a file
+pattern-lisp examples/functions.plisp
+
+# Convert plisp to gram
+pattern-lisp --to-gram examples/arithmetic.plisp
+
+# Convert gram to plisp
+pattern-lisp --to-plisp program.plisp.gram
+```
+
+### Building Without Installation
+
+If you prefer to build without installing:
 
 1. **Update Cabal index and resolve dependencies**:
    ```bash

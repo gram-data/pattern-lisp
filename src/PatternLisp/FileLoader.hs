@@ -20,16 +20,22 @@ module PatternLisp.FileLoader
   , processFiles
   , deriveNameFromFilename
   , FileLoadResult(..)
+  , parseFileContent
   ) where
 
 import PatternLisp.Syntax
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Gram
+import PatternLisp.Codec (gramToExprProgram)
 import System.FilePath (takeBaseName)
 import qualified Data.Map as Map
 import Data.List (isSuffixOf, isPrefixOf, partition, elemIndex)
 import Control.Monad (foldM)
+import Gram.Parse (fromGram)
+import qualified Pattern.Core as PatternCore
+import Subject.Core (properties)
+import qualified Subject.Value as SubjectValue
 
 -- | Result of loading a plisp file
 data FileLoadResult = FileLoadResult
@@ -96,18 +102,46 @@ loadPlispFile filepath runtimeEnv = do
               finalEnv = Map.insert name val updatedEnv
           return $ Right $ FileLoadResult finalEnv name val
 
--- | Loads a `.gram` file and parses it to Pattern Subject.
+-- | Loads a `.gram` file and parses it.
 --
--- The file is parsed as gram notation and converted to Pattern Subject.
+-- If the gram file is a pattern-lisp program (has `kind: "Pattern Lisp"`),
+-- it evaluates the expressions and returns the final value.
+-- Otherwise, it loads as a Pattern Subject state variable.
 -- It's bound to the filename-derived name.
 loadGramFile :: FilePath -> Env -> IO (Either Error (String, Value))
-loadGramFile filepath _env = do
+loadGramFile filepath runtimeEnv = do
   content <- readFile filepath
-  case gramToPattern content of
+  -- Check if this is a pattern-lisp program by parsing and checking for kind property
+  case fromGram content of
     Left parseErr -> return $ Left $ ParseError (show parseErr)
-    Right pat -> do
-      let name = deriveNameFromFilename filepath
-      return $ Right (name, VPattern pat)
+    Right patterns -> do
+      case patterns of
+        [] -> return $ Left $ ParseError "Empty gram file"
+        (headerPat : _) -> do
+          let headerSubj = PatternCore.value headerPat
+              kindProp = Map.lookup "kind" (properties headerSubj)
+          case kindProp of
+            Just (SubjectValue.VString "Pattern Lisp") -> do
+              -- Pattern-lisp program: convert to expressions and evaluate
+              case gramToExprProgram content of
+                Left err -> return $ Left err
+                Right exprs -> do
+                  -- Wrap expressions in begin for evaluation
+                  let expr = case exprs of
+                        [single] -> single
+                        _ -> List (Atom (Symbol "begin") : exprs)
+                  case evalExprWithEnv expr runtimeEnv of
+                    Left evalErr -> return $ Left evalErr
+                    Right (val, _updatedEnv) -> do
+                      let name = deriveNameFromFilename filepath
+                      return $ Right (name, val)
+            _ -> do
+              -- Regular gram file: load as Pattern Subject
+              case gramToPattern content of
+                Left parseErr -> return $ Left $ ParseError (show parseErr)
+                Right pat -> do
+                  let name = deriveNameFromFilename filepath
+                  return $ Right (name, VPattern pat)
 
 -- | Processes a list of files, loading them into the environment.
 --

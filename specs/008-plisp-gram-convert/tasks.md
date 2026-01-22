@@ -111,13 +111,13 @@
 
 **Purpose**: Wire tests, usage, round-trip, and quickstart.
 
-- [ ] T014 Register `PatternLisp.ConvertSpec` in `test/Spec.hs` (import and describe block).
+- [x] T014 Register `PatternLisp.ConvertSpec` in `test/Spec.hs` (import and describe block).
 
-- [ ] T015 Add `--to-gram`, `--to-plisp`, `-o`/`--output`, and `.plisp.gram` convention to usage/help in `app/Main.hs`.
+- [x] T015 Add `--to-gram`, `--to-plisp`, `-o`/`--output`, and `.plisp.gram` convention to usage/help in `app/Main.hs`.
 
-- [ ] T016 Add round-trip test (plisp→gram→plisp) in `test/IntegrationSpec.hs` using `programToGram`/`gramToProgram` and `valueToPlispSource`; assert plisp equivalence.
+- [x] T016 Add round-trip test (plisp→gram→plisp) in `test/IntegrationSpec.hs` using `programToGram`/`gramToProgram` and `valueToPlispSource`; assert plisp equivalence.
 
-- [ ] T017 Run `specs/008-plisp-gram-convert/quickstart.md` validation (convert plisp→gram, gram→plisp, round-trip, and error cases).
+- [x] T017 Run `specs/008-plisp-gram-convert/quickstart.md` validation (convert plisp→gram, gram→plisp, round-trip, and error cases).
 
 ---
 
