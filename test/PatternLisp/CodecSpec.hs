@@ -5,7 +5,7 @@ import PatternLisp.Syntax
 import PatternLisp.Parser
 import PatternLisp.Eval
 import PatternLisp.Primitives
-import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue, exprToSubject, subjectToExpr)
+import PatternLisp.Codec (valueToPatternSubjectForGram, patternSubjectToValue, exprToSubject, subjectToExpr, exprToPlisp, valueToPlispSource)
 import PatternLisp.Gram (patternToGram, gramToPattern)
 import PatternLisp.Syntax (Error(..))
 import Pattern (Pattern)
@@ -283,6 +283,78 @@ spec = describe "PatternLisp.Codec - Complete Value Serialization" $ do
         Just (SubjectValue.VString name) -> name `shouldBe` "my-var"
         _ -> fail "Variable name not stored correctly as property"
   
+  describe "exprToPlisp" $ do
+    it "round-trip atoms" $ do
+      let atoms =
+            [ Atom (Symbol "x")
+            , Atom (Number 42)
+            , Atom (Number (-10))
+            , Atom (String "hello")
+            , Atom (String "hi \"there\"")
+            , Atom (Bool True)
+            , Atom (Bool False)
+            , Atom (Keyword "name")
+            ]
+      mapM_ (\e -> case parseExpr (exprToPlisp e) of
+        Left err -> fail $ "exprToPlisp round-trip failed for " ++ show e ++ ": " ++ show err
+        Right e' -> e' `shouldBe` e
+        ) atoms
+    it "round-trip lists and quote" $ do
+      let exprs =
+            [ List [Atom (Symbol "+"), Atom (Number 1), Atom (Number 2)]
+            , List []
+            , Quote (Atom (Symbol "x"))
+            ]
+      mapM_ (\e -> case parseExpr (exprToPlisp e) of
+        Left err -> fail $ "exprToPlisp round-trip failed for " ++ show e ++ ": " ++ show err
+        Right e' -> e' `shouldBe` e
+        ) exprs
+    it "round-trip array, set, and record literals" $ do
+      let exprs =
+            [ ArrayLiteral [Atom (Number 1), Atom (Number 2)]
+            , SetLiteral [Atom (Number 1), Atom (Number 2), Atom (Number 3)]
+            , RecordLiteral [("name", Atom (String "Alice")), ("age", Atom (Number 30))]
+            ]
+      mapM_ (\e -> case parseExpr (exprToPlisp e) of
+        Left err -> fail $ "exprToPlisp round-trip failed for " ++ show e ++ ": " ++ show err
+        Right e' -> e' `shouldBe` e
+        ) exprs
+
+  describe "valueToPlispSource" $ do
+    it "serializes scalars" $ do
+      valueToPlispSource (VInteger 42) `shouldBe` Right "42"
+      valueToPlispSource (VString "hi") `shouldBe` Right "\"hi\""
+      valueToPlispSource (VBoolean True) `shouldBe` Right "true"
+      valueToPlispSource (VKeyword "k") `shouldBe` Right "k:"
+      valueToPlispSource (VSymbol "x") `shouldBe` Right "x"
+      valueToPlispSource (VDecimal 3.14) `shouldBe` Right "3.14"
+    it "serializes VArray, VMap, VSet" $ do
+      valueToPlispSource (VArray [VInteger 1, VInteger 2]) `shouldBe` Right "[1, 2]"
+      valueToPlispSource (VMap $ Map.fromList [("a", VInteger 1), ("b", VString "x")]) `shouldBe` Right "{a: 1, b: \"x\"}"
+      valueToPlispSource (VSet $ Set.fromList [VInteger 1, VInteger 2]) `shouldBe` Right "#{1 2}"
+    it "serializes VClosure and VPrimitive" $ do
+      case parseExpr "(lambda (x) (+ x 1))" of
+        Left err -> fail $ "parse: " ++ show err
+        Right expr -> case evalExpr expr initialEnv of
+          Left err' -> fail $ "eval: " ++ show err'
+          Right val -> valueToPlispSource val `shouldBe` Right "(lambda (x) (+ x 1))"
+      valueToPlispSource (VPrimitive Add) `shouldBe` Right "+"
+    it "valueToPlispSource then parse and eval yields equivalent value" $ do
+      let vs = [VInteger 42, VString "a", VBoolean True, VArray [VInteger 1, VInteger 2]]
+      mapM_ (\v -> case valueToPlispSource v of
+        Left e -> fail $ "valueToPlispSource: " ++ show e
+        Right s -> case parseExpr s of
+          Left e' -> fail $ "parse: " ++ show e'
+          Right ex -> case evalExpr ex initialEnv of
+            Left e'' -> fail $ "eval: " ++ show e''
+            Right v' -> v' `shouldBe` v
+        ) vs
+    it "VPattern returns Left" $ do
+      let pat = createTestPattern "x"
+      case valueToPlispSource (VPattern pat) of
+        Left _ -> True `shouldBe` True
+        Right _ -> fail "Expected Left for VPattern"
+
   describe "Error handling" $ do
     it "invalid pattern structures error correctly" $ do
       -- Test with missing properties in Number pattern

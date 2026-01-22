@@ -169,6 +169,23 @@ Enable state Pattern to function as a knowledge graph.
 
 ---
 
+#### Gram→plisp for Non–Pattern-Lisp Gram (Deferred from 008-plisp-gram-convert)
+
+**From `specs/008-plisp-gram-convert/research.md` and `spec.md`**
+
+When gram does not contain a valid pattern-lisp program (`{ kind: "Pattern Lisp" }` and value patterns), the convert CLI currently reports an error. Deferred: support for parsing such gram into Pattern Subject data and determining if any of the data can be evaluated.
+
+**Implementation tasks**:
+- Parse gram into Pattern Subject data (all gram is expected to be valid pattern-lisp data at the pattern level)
+- Design: determine if any of the data can be evaluated; define resulting behavior (output plisp, partial plisp, or error) and any new acceptance/error cases
+- Adopt a **single global** (or analogous) binding for the parsed data so expressions can reference it; do **not** use one `define` per field (follow Clojure/Racket/Common Lisp conventions; see spec Research and Clarifications)
+- Define the plisp shape for that binding (e.g. `(define *gram-data* ...)`) and how evaluatable expressions reference it
+- Update `--to-plisp` to support this mode when the gram lacks pattern-lisp program structure
+
+**Dependencies**: 008-plisp-gram-convert complete (basic `--to-gram` and `--to-plisp` for pattern-lisp programs)
+
+---
+
 #### Specification Document
 
 **Formalize language semantics for reimplementation**
@@ -278,9 +295,11 @@ Minimal effect system for describing I/O and side effects.
 2. **Sets** (foundational - can be parallel with keywords)
 3. **Maps** (requires keywords)
 4. **Recursive Definitions** (language feature, independent)
-5. **Host-Call Boundary** (requires maps for configuration)
-6. **Graph Lens Integration** (requires maps and sets)
-7. **Extended Examples & Tooling** (requires all foundational features)
-8. **Specification Document** (requires all language features)
-9. **Effect System** (requires host-call and maps)
-10. **Advanced Features** (future work)
+5. **Plisp–Gram Convert CLI (008)** (tooling - `--to-gram`, `--to-plisp` for pattern-lisp programs; see Tier 3 for deferred "Gram→plisp for non–pattern-lisp gram")
+6. **Host-Call Boundary** (requires maps for configuration)
+7. **Graph Lens Integration** (requires maps and sets)
+8. **Extended Examples & Tooling** (requires all foundational features)
+9. **Gram→plisp for non–pattern-lisp gram** (extends 008; parse→data→evaluate, single global for raw data)
+10. **Specification Document** (requires all language features)
+11. **Effect System** (requires host-call and maps)
+12. **Advanced Features** (future work)

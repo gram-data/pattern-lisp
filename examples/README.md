@@ -13,6 +13,18 @@ Example programs demonstrate:
 
 ## Running Examples
 
+### Direct Execution
+
+Run example programs directly:
+
+```bash
+# Using cabal run
+cabal run pattern-lisp -- examples/arithmetic.plisp
+
+# Or if installed
+pattern-lisp examples/arithmetic.plisp
+```
+
 ### Using the REPL
 
 You can load and run example programs using the REPL:
@@ -24,6 +36,22 @@ cat examples/factorial.plisp | cabal run pattern-lisp
 ### Programmatically
 
 Example programs can be loaded and evaluated programmatically using the library API. See the test suite (`test/ExamplesSpec.hs`) for examples of how to evaluate multi-line programs.
+
+## Example Status
+
+**Working Examples** (8/10):
+- ✓ `arithmetic.plisp` - Basic arithmetic operations
+- ✓ `conditionals.plisp` - Conditional expressions
+- ✓ `functions.plisp` - Function definitions
+- ✓ `lists.plisp` - List operations
+- ✓ `scoping.plisp` - Scoping and closures
+- ✓ `pattern-basics.plisp` - Pattern construction
+- ✓ `pattern-predicates.plisp` - Pattern predicates
+- ✓ `keywords-maps-sets.plisp` - Keywords, maps, and sets operations
+
+**Examples with Known Issues** (2/10):
+- ✗ `factorial.plisp` - Recursive definitions not yet supported (documented limitation)
+- ✗ `records.plisp` - Parse error with multi-expression file containing empty records (`{}`) in `begin` expressions. Individual record expressions work correctly when tested separately.
 
 ## Example Files
 
@@ -73,6 +101,19 @@ Demonstrates record creation, manipulation, and operations using the inline reco
 - Real-world examples (user profiles, configuration objects, pattern subjects)
 
 Records are gram-compatible and use comma-separated key-value pairs. Keys can be identifiers or strings, and values can be any pattern-lisp value type.
+
+**⚠️ Known Issue**: This example file currently fails to parse when run as a multi-expression file due to parser limitations with empty records (`{}`) in `begin` expressions. Individual record expressions work correctly. This is a known limitation that will be addressed in a future update.
+
+### `keywords-maps-sets.plisp`
+
+Demonstrates keywords, maps (records), and sets. Shows:
+- Keyword syntax and self-evaluation
+- Map/record creation and operations
+- Set creation and operations (union, intersection, difference)
+- Set predicates (subset, equality, empty checks)
+- Combined examples with nested structures
+
+**Note**: Uses `define` (not `def`) for variable bindings. Nested access uses `(get (get data "user") "name")` instead of `get-in` (which is not yet implemented).
 
 ## Notes
 

@@ -58,6 +58,17 @@ module PatternLisp.Codec
   , patternSubjectToValue
   , programToGram
   , gramToProgram
+  -- Plisp source serialization (008-plisp-gram-convert)
+  , exprToPlisp
+  , valueToPlispSource
+  -- Expression to gram (preserves source structure)
+  , exprProgramToGram
+  -- Gram to expression program (for round-trip)
+  , gramToExprProgram
+  -- Check if pattern is an expression pattern
+  , isExpressionPattern
+  -- Extract expressions from Expr (unwrap begin)
+  , extractExpressions
   ) where
 
 import PatternLisp.Syntax
@@ -70,7 +81,7 @@ import qualified Subject.Core as SubjectCore
 import qualified Subject.Value as SubjectValue
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Data.List (nubBy)
+import Data.List (nubBy, intercalate)
 import Data.Maybe (mapMaybe)
 import Control.Monad.State (State, runState, get, modify)
 import Control.Monad (foldM)
@@ -1484,6 +1495,120 @@ extractParamName pat = do
       _ -> Left $ TypeMismatch "Symbol pattern missing name property" (VArray [])
     else Left $ TypeMismatch "Expected Symbol pattern for parameter" (VArray [])
 
+-- ============================================================================
+-- Plisp source serialization (008-plisp-gram-convert)
+-- ============================================================================
+-- exprToPlisp and valueToPlispSource produce plisp source that parses and
+-- (for valueToPlispSource) evaluates to equivalent Expr/Value. Used by
+-- gram→plisp in the convert CLI.
+
+-- | Escape a string for double-quoted plisp string literals.
+-- Handles \\, \", \n, \t, \r.
+escapeString :: String -> String
+escapeString = concatMap esc
+  where
+    esc '\\' = "\\\\"
+    esc '"'  = "\\\""
+    esc '\n' = "\\n"
+    esc '\t' = "\\t"
+    esc '\r' = "\\r"
+    esc c    = [c]
+
+-- | True if the expression contains Unquote or UnquoteSplice (requires quasiquote context).
+containsUnquote :: Expr -> Bool
+containsUnquote (Unquote _)       = True
+containsUnquote (UnquoteSplice _) = True
+containsUnquote (List es)         = any containsUnquote es
+containsUnquote (Quote e)         = containsUnquote e
+containsUnquote (ArrayLiteral es) = any containsUnquote es
+containsUnquote (SetLiteral es)   = any containsUnquote es
+containsUnquote (RecordLiteral ps) = any (containsUnquote . snd) ps
+containsUnquote _                 = False
+
+-- | Emit record key as plisp: bare identifier or \"key\" for arbitrary strings.
+-- Parser accepts Symbol (identifier) or string for keys.
+recordKeyPlisp :: String -> String
+recordKeyPlisp k
+  | isBareKey k = k
+  | otherwise   = "\"" ++ escapeString k ++ "\""
+  where
+    -- Identifier-like: first char letter or !$%&*+-./<=>?@^_~, rest same or digit or :
+    isBareKey s = case s of
+      (c:cs) -> isIdFirst c && all isIdRest cs
+      []     -> False
+    isIdFirst c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                  || c `elem` ("!$%&*+-./<=>?@^_~" :: String)
+    isIdRest c  = isIdFirst c || (c >= '0' && c <= '9') || c == ':'
+
+-- | Serialize Expr to plisp source. Round-trip: parseExpr (exprToPlisp e) ≡ Right e
+-- for supported forms. Unquote/UnquoteSplice are emitted in quasiquote form when present.
+exprToPlisp :: Expr -> String
+exprToPlisp e
+  | containsUnquote e = "`" ++ exprToPlispQuasi e
+  | otherwise         = exprToPlispSimple e
+
+exprToPlispSimple :: Expr -> String
+exprToPlispSimple (Atom (Symbol s))   = s
+exprToPlispSimple (Atom (Number n))   = show n
+exprToPlispSimple (Atom (String s))   = "\"" ++ escapeString s ++ "\""
+exprToPlispSimple (Atom (Bool True))  = "true"
+exprToPlispSimple (Atom (Bool False)) = "false"
+exprToPlispSimple (Atom (Keyword k))  = k ++ ":"
+exprToPlispSimple (List es)           = "(" ++ intercalate " " (map exprToPlisp es) ++ ")"
+exprToPlispSimple (Quote e)           = "'" ++ exprToPlisp e
+exprToPlispSimple (ArrayLiteral es)   = "[" ++ intercalate ", " (map exprToPlisp es) ++ "]"
+exprToPlispSimple (SetLiteral es)     = "#{" ++ intercalate " " (map exprToPlisp es) ++ "}"
+exprToPlispSimple (RecordLiteral ps)  = "{" ++ intercalate ", " (map recordEntry ps) ++ "}"
+  where recordEntry (key, Unquote v)        = recordKeyPlisp key ++ ": , " ++ exprToPlisp v
+        recordEntry (key, UnquoteSplice v)  = if null key
+          then ",@ " ++ exprToPlisp v
+          else recordKeyPlisp key ++ ": ,@ " ++ exprToPlisp v
+        recordEntry (key, v)                = recordKeyPlisp key ++ ": " ++ exprToPlisp v
+exprToPlispSimple (Unquote e)         = "(, " ++ exprToPlisp e ++ ")"
+exprToPlispSimple (UnquoteSplice e)   = "(,@ " ++ exprToPlisp e ++ ")"
+
+-- | Variant used when the outer context is a quasiquote; emits (, e) and (,@ e) for unquote.
+exprToPlispQuasi :: Expr -> String
+exprToPlispQuasi (Unquote e)       = "(, " ++ exprToPlisp e ++ ")"
+exprToPlispQuasi (UnquoteSplice e) = "(,@ " ++ exprToPlisp e ++ ")"
+exprToPlispQuasi (List es)         = "(" ++ intercalate " " (map exprToPlispQuasi es) ++ ")"
+exprToPlispQuasi (Quote e)         = "'" ++ exprToPlispQuasi e
+exprToPlispQuasi (ArrayLiteral es) = "[" ++ intercalate ", " (map exprToPlispQuasi es) ++ "]"
+exprToPlispQuasi (SetLiteral es)   = "#{" ++ intercalate " " (map exprToPlispQuasi es) ++ "}"
+exprToPlispQuasi (RecordLiteral ps)= "{" ++ intercalate ", " (map recordEntryQ ps) ++ "}"
+  where recordEntryQ (key, Unquote v)       = recordKeyPlisp key ++ ": , " ++ exprToPlisp v
+        recordEntryQ (key, UnquoteSplice v) = if null key
+          then ",@ " ++ exprToPlisp v
+          else recordKeyPlisp key ++ ": ,@ " ++ exprToPlisp v
+        recordEntryQ (key, v)               = recordKeyPlisp key ++ ": " ++ exprToPlispQuasi v
+exprToPlispQuasi e                 = exprToPlispSimple e
+
+-- | Serialize Value to plisp source. Emitted plisp must parse and evaluate to an equivalent value.
+-- Uses exprToPlisp for closure bodies. VPattern, VTaggedString, VRange, VMeasurement → Left.
+valueToPlispSource :: Value -> Either Error String
+valueToPlispSource (VInteger n)       = Right (show n)
+valueToPlispSource (VDecimal d)       = Right (show d)
+valueToPlispSource (VString s)        = Right ("\"" ++ escapeString s ++ "\"")
+valueToPlispSource (VBoolean b)       = Right (if b then "true" else "false")
+valueToPlispSource (VKeyword k)       = Right (k ++ ":")
+valueToPlispSource (VSymbol s)        = Right s
+valueToPlispSource (VArray vs)        = do
+  strs <- mapM valueToPlispSource vs
+  Right ("[" ++ intercalate ", " strs ++ "]")
+valueToPlispSource (VMap m) = do
+  strs <- mapM (\(k, v) -> do s <- valueToPlispSource v; return (recordKeyPlisp k ++ ": " ++ s)) (Map.toList m)
+  Right ("{" ++ intercalate ", " strs ++ "}")
+valueToPlispSource (VSet s) = do
+  strs <- mapM valueToPlispSource (Set.toList s)
+  Right ("#{" ++ intercalate " " strs ++ "}")
+valueToPlispSource (VClosure c) =
+  Right ("(lambda (" ++ intercalate " " (params c) ++ ") " ++ exprToPlisp (body c) ++ ")")
+valueToPlispSource (VPrimitive p)     = Right (primitiveName p)
+valueToPlispSource (VPattern _)       = Left (TypeMismatch "VPattern cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VTaggedString _ _)= Left (TypeMismatch "VTaggedString cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VRange _)         = Left (TypeMismatch "VRange cannot be serialized to plisp source" (VArray []))
+valueToPlispSource (VMeasurement _ _) = Left (TypeMismatch "VMeasurement cannot be serialized to plisp source" (VArray []))
+
 -- | Serializes a program (list of values) to Gram notation with file-level structure.
 -- Format:
 --   { kind: "Pattern Lisp" }
@@ -1504,42 +1629,94 @@ programToGram values _runtimeEnv =
       -- Serialize each value as a pattern
       valuePatterns = map valueToPatternSubjectForGram values
       -- Combine file metadata with value patterns
-      -- Gram files are sequences of patterns, so we serialize them separately
-      metadataGram = toGram fileMetadata
-      valueGrams = map toGram valuePatterns
-  in unlines (metadataGram : valueGrams)
+      -- toGram accepts [Pattern Subject] and produces newline-separated output
+  in toGram (fileMetadata : valuePatterns)
+
+-- | Extracts individual expressions from an Expr, unwrapping begin if present.
+-- Returns a list of expressions (1:1 mapping, no begin wrapper).
+extractExpressions :: Expr -> [Expr]
+extractExpressions (List (Atom (Symbol "begin") : exprs)) = exprs
+extractExpressions expr = [expr]
+
+-- | Serializes an expression program to Gram notation with file-level structure.
+-- Preserves the source structure (expressions) rather than evaluated values.
+-- If input is (begin e1 e2 ...), extracts e1, e2, ... and stores as separate patterns.
+-- Format:
+--   { kind: "Pattern Lisp" }
+--   exprPattern1
+--   exprPattern2
+--   ...
+-- where each exprPattern is an Expr converted to Pattern Subject.
+exprProgramToGram :: Expr -> String
+exprProgramToGram expr =
+  -- Create file-level property record pattern
+  let fileMetadata = pattern
+        (Subject
+          { identity = SubjectCore.Symbol ""
+          , labels = Set.empty
+          , properties = Map.fromList [("kind", SubjectValue.VString "Pattern Lisp")]
+          })
+        []
+      -- Extract individual expressions (unwrap begin if present)
+      exprs = extractExpressions expr
+      -- Convert each expression to Pattern Subject
+      exprPatterns = map exprToPatternSubjectPure exprs
+      -- Combine file metadata with expression patterns
+      -- toGram accepts [Pattern Subject] and produces newline-separated output
+  in toGram (fileMetadata : exprPatterns)
+
+-- | Checks if a pattern represents an expression (has expression labels like :List, :Begin, etc.)
+-- vs a value (has value labels like :Number, :String, etc.)
+isExpressionPattern :: Pattern Subject -> Bool
+isExpressionPattern pat =
+  let lbls = labels (PatternCore.value pat)
+      exprLabels = Set.fromList ["List", "Begin", "If", "Let", "Define", "Quote"]
+  in not (Set.null (Set.intersection lbls exprLabels))
+
+-- | Deserializes Gram notation to a list of expressions (1:1 mapping, no begin wrapper).
+-- Similar to gramToProgram but returns [Expr] instead of [Value].
+-- Used for round-trip when gram contains expression patterns.
+gramToExprProgram :: String -> Either Error [Expr]
+gramToExprProgram gramText = do
+  patterns <- case fromGram gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right ps -> Right ps
+  case patterns of
+    [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
+    (headerPat : contentPats) -> do
+      let headerSubj = PatternCore.value headerPat
+          kindProp = Map.lookup "kind" (properties headerSubj)
+      case kindProp of
+        Just (SubjectValue.VString "Pattern Lisp") -> do
+          -- Convert each pattern to Expr (1:1 mapping, no begin wrapper)
+          mapM patternSubjectToExpr contentPats
+        _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
 
 -- | Deserializes Gram notation to a program (list of values and environment).
+-- Follows the gram document model: one document → fromGram → [Pattern];
+-- first pattern is the header (require kind: "Pattern Lisp"); rest are value or expression patterns.
 -- Expects format:
 --   { kind: "Pattern Lisp" }
 --   expr1
 --   expr2
 --   ...
 -- Note: No separate Environment section - scopes are inlined in :Scope patterns
+-- Handles both expression patterns (from exprProgramToGram) and value patterns (from programToGram).
 gramToProgram :: String -> Either Error ([Value], Env)
 gramToProgram gramText = do
-  -- Split by lines and parse each pattern
-  let lines' = filter (not . null) $ map (dropWhile (== ' ')) $ lines gramText
-  case lines' of
+  patterns <- case fromGram gramText of
+    Left parseErr -> Left $ ParseError (show parseErr)
+    Right ps -> Right ps
+  case patterns of
     [] -> Left $ TypeMismatch "Empty Gram file" (VArray [])
-    (metadataLine : valueLines) -> do
-      -- Parse first pattern as file metadata
-      metadataPat <- case fromGram metadataLine of
-        Left parseErr -> Left $ ParseError (show parseErr)
-        Right p -> Right p
-      -- Verify it's the file metadata (has kind property)
-      let metadataSubj = PatternCore.value metadataPat
-          kindProp = Map.lookup "kind" (properties metadataSubj)
+    (headerPat : contentPats) -> do
+      let headerSubj = PatternCore.value headerPat
+          kindProp = Map.lookup "kind" (properties headerSubj)
       case kindProp of
         Just (SubjectValue.VString "Pattern Lisp") -> do
-          -- Parse remaining patterns as expressions
-          valuePatterns <- mapM (\line -> case fromGram line of
-            Left parseErr -> Left $ ParseError (show parseErr)
-            Right p -> Right p
-            ) valueLines
-          -- Convert each pattern to a value
-          values <- mapM patternSubjectToValue valuePatterns
-          -- Return values with standard library environment
+          -- Value patterns: convert directly to Values
+          -- Note: Expression patterns should be handled via gramToExprProgram + evaluation in Main.hs
+          values <- mapM patternSubjectToValue contentPats
           Right (values, initialEnv)
         _ -> Left $ TypeMismatch "File missing 'kind: Pattern Lisp' property record" (VArray [])
 

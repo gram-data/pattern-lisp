@@ -18,7 +18,7 @@ status:
 ;; ============================================================================
 
 ;; Create a map with keyword keys
-(def user {name: "Alice" age: 30 active: true})
+(define user {name: "Alice", age: 30, active: true})
 
 ;; Access map values
 (get user name:)  ;; => "Alice"
@@ -26,15 +26,15 @@ status:
 (get user email: "unknown")  ;; => "unknown" (default value)
 
 ;; Nested maps
-(def data {user: {name: "Bob" email: "bob@example.com"}
-           config: {debug: true verbose: false}})
+(define data {user: {name: "Bob", email: "bob@example.com"},
+           config: {debug: true, verbose: false}})
 
-;; Nested access with get-in
-(get-in data (quote (user: name:)))  ;; => "Bob"
+;; Nested access (get-in not yet implemented, use nested get)
+(get (get data "user") "name")  ;; => "Bob"
 
 ;; Update maps (returns new map)
-(def user2 (assoc user age: 31))  ;; Update age
-(def user3 (dissoc user active:))  ;; Remove active key
+(define user2 (assoc user age: 31))  ;; Update age
+(define user3 (dissoc user active:))  ;; Remove active key
 
 ;; Check membership
 (contains? user name:)  ;; => true
@@ -52,8 +52,8 @@ status:
 ;; ============================================================================
 
 ;; Create sets
-(def numbers #{1 2 3 4 5})
-(def labels #{"Person" "Employee" "Manager"})
+(define numbers #{1 2 3 4 5})
+(define labels #{"Person" "Employee" "Manager"})
 
 ;; Check membership
 (contains? numbers 3)  ;; => true
@@ -78,15 +78,15 @@ status:
 ;; ============================================================================
 
 ;; Maps with set values (Subject labels)
-(def person {name: "Alice"
-             labels: #{"Person" "Employee"}
-             metadata: {department: "Engineering" level: "Senior"}})
+(define person {name: "Alice",
+             labels: #{"Person" "Employee"},
+             metadata: {department: "Engineering", level: "Senior"}})
 
 ;; Sets of keywords
-(def permissions #{read: write: execute:})
+(define permissions #{read: write: execute:})
 
 ;; Nested structures
-(def config {servers: #{1 2 3}
-             settings: {timeout: 5000 retry: 3}
+(define config {servers: #{1 2 3},
+             settings: {timeout: 5000, retry: 3},
              features: #{logging: caching: compression:}})
 

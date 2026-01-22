@@ -7,6 +7,7 @@ import qualified PatternLisp.EvalSpec
 import qualified PatternLisp.PatternSpec
 import qualified PatternLisp.RuntimeSpec
 import qualified PatternLisp.CodecSpec
+import qualified PatternLisp.ConvertSpec
 import qualified PatternLisp.GramSpec
 import qualified PatternLisp.GramSerializationSpec
 import qualified PatternLisp.RecordGramCompatibilitySpec
@@ -24,6 +25,7 @@ main = hspec $ do
     PatternLisp.PatternSpec.spec
     PatternLisp.RuntimeSpec.spec
     PatternLisp.CodecSpec.spec
+    PatternLisp.ConvertSpec.spec
     PatternLisp.GramSpec.spec
     PatternLisp.GramSerializationSpec.spec
     PatternLisp.RecordGramCompatibilitySpec.spec
