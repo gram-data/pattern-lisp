@@ -188,9 +188,7 @@ runConvertToPlisp inputPath outputPath = do
       exitFailure
     Right gramText -> do
       -- Check if gram contains expression patterns by parsing and checking labels
-      let patternsResult = case Gram.Parse.fromGram gramText of
-            Left _ -> Right []
-            Right ps -> Right ps
+      let patternsResult = Gram.Parse.fromGram gramText
       case patternsResult of
         Left _ -> do
           -- Parse error, let gramToProgram handle it
@@ -234,24 +232,20 @@ runConvertToPlisp inputPath outputPath = do
                       exitFailure
                     Right exprs -> do
                       -- Convert each expression to plisp source, output line-delimited (no begin wrapper)
-                      case mapM (\expr -> Right (exprToPlisp expr)) exprs of
-                        Left err -> do
-                          hPutStrLn stderr (formatError err)
+                      let plispStrs = map exprToPlisp exprs
+                      if null plispStrs
+                        then do
+                          hPutStrLn stderr "Error: Gram file contains no expression patterns (only metadata)"
                           exitFailure
-                        Right plispStrs -> do
-                          if null plispStrs
-                            then do
-                              hPutStrLn stderr "Error: Gram file contains no expression patterns (only metadata)"
+                        else do
+                          -- Output each expression on a separate line (1:1 mapping)
+                          let plisp = unlines plispStrs
+                          writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
+                          case writeResult of
+                            Left err -> do
+                              hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
                               exitFailure
-                            else do
-                              -- Output each expression on a separate line (1:1 mapping)
-                              let plisp = unlines plispStrs
-                              writeResult <- try (writeFile outputPath plisp) :: IO (Either IOException ())
-                              case writeResult of
-                                Left err -> do
-                                  hPutStrLn stderr $ "Error: Could not write output file: " ++ show err
-                                  exitFailure
-                                Right _ -> return ()
+                            Right _ -> return ()
                 else do
                   -- Value patterns: use gramToProgram + valueToPlispSource
                   -- Value patterns: use gramToProgram + valueToPlispSource
